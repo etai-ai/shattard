@@ -126,20 +126,20 @@
     top: 0; left: 0;
     width: 100%;
     z-index: 20;
-    padding: 0.8rem 1rem;
+    padding: 1rem 1.2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+    font-size: clamp(1rem, 3.5vw, 1.3rem);
     background: linear-gradient(180deg, #000a 0%, transparent 100%);
     pointer-events: none;
   }
   #hud.hidden { display: none; }
   .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; }
-  .hud-combo { color: var(--matrix-bright); font-size: 0.75em; }
+  .hud-combo { color: var(--matrix-bright); font-size: 0.85em; }
   .hud-lives { display: flex; gap: 4px; }
   .life-pip {
-    width: 12px; height: 12px;
+    width: 18px; height: 18px;
     border: 1px solid var(--matrix-green);
     background: var(--matrix-green);
     box-shadow: var(--glow-sm);
@@ -347,7 +347,7 @@ let totalCollected, totalDodged;
 let lastTap = 0;
 let touchStartX, touchStartY, touching = false;
 
-const PLAYER_SIZE = 22;
+const PLAYER_SIZE = 34;
 const MAX_LIVES = 3;
 const TOUCH_Y_OFFSET = -80; // player renders above finger on touch devices
 const SLOW_MO_DURATION = 3000;
@@ -361,7 +361,7 @@ function resizeGame() {
 // ─── ENTITY TYPES ───
 function spawnGlyph() {
   const isGood = Math.random() < 0.45;
-  const size = isGood ? 18 : (14 + Math.random() * 10);
+  const size = isGood ? 28 : (22 + Math.random() * 14);
   const speed = (1.5 + difficulty * 0.4 + Math.random() * 1.5) * (isGood ? 0.8 : 1);
   entities.push({
     type: isGood ? 'good' : 'bad',
@@ -383,7 +383,7 @@ function spawnPowerUp() {
     type: 'power',
     x: Math.random() * (W - 60) + 30,
     y: -30,
-    size: 20,
+    size: 30,
     speed: 1 + Math.random(),
     char: '⬡',
     alpha: 1,
