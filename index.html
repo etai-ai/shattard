@@ -347,7 +347,7 @@ let totalCollected, totalDodged;
 let lastTap = 0;
 let touchStartX, touchStartY, touching = false;
 
-const PLAYER_SIZE = 34;
+const PLAYER_SIZE = 31;
 const MAX_LIVES = 3;
 const TOUCH_Y_OFFSET = -80; // player renders above finger on touch devices
 const SLOW_MO_DURATION = 3000;
@@ -361,7 +361,7 @@ function resizeGame() {
 // ─── ENTITY TYPES ───
 function spawnGlyph() {
   const isGood = Math.random() < 0.45;
-  const size = isGood ? 28 : (22 + Math.random() * 14);
+  const size = isGood ? 27 : (21 + Math.random() * 13);
   const speed = (1.5 + difficulty * 0.4 + Math.random() * 1.5) * (isGood ? 0.8 : 1);
   entities.push({
     type: isGood ? 'good' : 'bad',
@@ -383,7 +383,7 @@ function spawnPowerUp() {
     type: 'power',
     x: Math.random() * (W - 60) + 30,
     y: -30,
-    size: 30,
+    size: 29,
     speed: 1 + Math.random(),
     char: '⬡',
     alpha: 1,
