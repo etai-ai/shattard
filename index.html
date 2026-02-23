@@ -54,15 +54,14 @@ canvas{display:block;width:100vw;height:100dvh}
   </div>
   <div id="how-to-play" style="font-family:'Exo 2',sans-serif;font-size:13px;color:rgba(255,255,255,0.4);letter-spacing:1px;line-height:2;margin-bottom:24px;text-align:center">
     <div style="color:rgba(255,255,255,0.2);font-size:11px;letter-spacing:3px;margin-bottom:8px;text-transform:uppercase">HOW TO PLAY</div>
-    <div>Left click / ← / A — steer left</div>
-    <div>Right click / → / D — steer right</div>
+    <div id="how-to-controls"></div>
     <div style="margin-top:8px;color:rgba(255,255,255,0.25)">collect <span style="color:#39ff14">matching</span> sparks · avoid <span style="color:#ff3366">dark matter</span></div>
   </div>
   <div id="best-row"></div>
   <button class="play-btn" id="play-btn">PLAY</button>
 </div>
 
-<div id="instructions">left/right click or arrow keys to steer · match your color · avoid the rest</div>
+<div id="instructions"></div>
 
 <script>
 const C = document.getElementById('c');
@@ -536,16 +535,15 @@ function update(dt) {
   gameTime += dt;
   speed = 1 + gameTime * SPEED_INCREASE;
 
-  // Move player — steerInput controls angular velocity
+  // Move player — keyboard (binary) takes priority, then analog mouse/touch
   const turnSpeed = 5.0; // radians per second at full input
   let steer = 0;
-  if (keysDown.left || mouseLeft) steer -= 1;
-  if (keysDown.right || mouseRight) steer += 1;
-  if (dragging) {
-    playerAngle += steerInput * turnSpeed * dt;
-  }
+  if (keysDown.left) steer -= 1;
+  if (keysDown.right) steer += 1;
   if (steer !== 0) {
     playerAngle += steer * turnSpeed * dt;
+  } else if (dragging || mouseDown) {
+    playerAngle += steerInput * turnSpeed * dt;
   }
 
   // Squish recovery
@@ -687,45 +685,67 @@ function loop(now) {
 // Steering: pointer X position relative to screen center controls turn speed
 // Left of center = rotate counter-clockwise, right = clockwise
 // Further from center = faster turning
-let pointerX = 0;
 let steerInput = 0; // -1 to 1
+let mouseDown = false;
+let touchStartX = 0;
 
-let mouseLeft = false, mouseRight = false;
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+// Set device-specific instructions
+(function setInstructions() {
+  const controlsEl = document.getElementById('how-to-controls');
+  const hintsEl = document.getElementById('instructions');
+  if (isTouchDevice) {
+    controlsEl.innerHTML = 'Touch and drag to steer';
+    hintsEl.textContent = 'touch and drag to steer \u00b7 match your color \u00b7 avoid the rest';
+  } else {
+    controlsEl.innerHTML = 'Hold click \u00b7 move mouse to steer<br>\u2190 / A / D / \u2192 \u2014 keyboard steer';
+    hintsEl.textContent = 'hold click and move mouse, or arrow keys to steer \u00b7 match your color \u00b7 avoid the rest';
+  }
+})();
+
+// Mouse: hold button + move for analog steering
 function onMouseDown(e) {
   if (!gameActive) return;
   initAudio();
   e.preventDefault();
-  if (e.button === 0) mouseLeft = true;
-  if (e.button === 2) mouseRight = true;
+  mouseDown = true;
+  steerInput = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  steerInput = Math.max(-1, Math.min(1, steerInput));
   document.getElementById('instructions').classList.add('hidden');
 }
 
-function onMouseUp(e) {
-  if (e.button === 0) mouseLeft = false;
-  if (e.button === 2) mouseRight = false;
+function onMouseMove(e) {
+  if (!mouseDown || !gameActive) return;
+  steerInput = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  steerInput = Math.max(-1, Math.min(1, steerInput));
 }
 
-// Touch: use left/right side of screen
+function onMouseUp(e) {
+  mouseDown = false;
+}
+
+// Touch: relative drag from initial touch point
 function onTouchStart(e) {
   if (!gameActive) return;
   initAudio();
   dragging = true;
-  const clientX = e.touches[0].clientX;
-  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  touchStartX = e.touches[0].clientX;
+  steerInput = 0;
   document.getElementById('instructions').classList.add('hidden');
 }
 
 function onTouchMove(e) {
   if (!dragging || !gameActive) return;
-  const clientX = e.touches[0].clientX;
-  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-  steerInput = Math.max(-1, Math.min(1, steerInput));
+  const sensitivity = window.innerWidth * 0.2;
+  const deltaX = e.touches[0].clientX - touchStartX;
+  steerInput = Math.max(-1, Math.min(1, deltaX / sensitivity));
 }
 
 function onTouchEnd() { dragging = false; steerInput = 0; }
 
 C.addEventListener('mousedown', onMouseDown);
+window.addEventListener('mousemove', onMouseMove);
 window.addEventListener('mouseup', onMouseUp);
 C.addEventListener('contextmenu', e => e.preventDefault());
 C.addEventListener('touchstart', onTouchStart);
