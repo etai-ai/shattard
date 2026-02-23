@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SHATTARD: Awaken is a browser-based arcade game built with vanilla JavaScript and HTML5 Canvas 2D. The entire application lives in a single `index.html` file (~774 lines). No build tools, no dependencies, no frameworks.
+SHATTARD: Awaken is a browser-based arcade game built with vanilla JavaScript and HTML5 Canvas 2D. No build tools, no dependencies, no frameworks.
 
 ## Running the Game
 
@@ -12,17 +12,11 @@ Open `index.html` in a browser. There is no build step, package manager, or dev 
 
 ## Architecture
 
-Single-file architecture with these logical sections inside `index.html`:
+Three-file structure:
 
-- **CSS** (lines 7-260): Matrix-green theme via CSS variables (`--matrix-green`, `--glow`, etc.), screen transitions, HUD, scanline overlay, slow-mo bar. Fonts: Share Tech Mono + Orbitron (Google Fonts).
-- **HTML** (lines 262-304): Two canvases (`#rain` for background, `#gameCanvas` for gameplay), three screens (`#titleScreen`, `#hud` + game, `#gameOver`) toggled via `.hidden` class, flash overlay, scanlines.
-- **Matrix rain** (lines 307-337): Separate canvas + animation loop for falling katakana/digit rain background, runs independently of game loop.
-- **Game state** (lines 339-358): Player, entities, particles, score/combo, lives, slow-mo energy, difficulty ramp, input tracking.
-- **Entity spawning** (lines 360-393): Three types — `good` (green glyphs, collect), `bad` (red glyphs, dodge), `power` (cyan hexagon, refills bullet time). Entities fall top-to-bottom with wobble.
-- **Input** (lines 425-465): Touch (drag to move, double-tap for slow-mo) and mouse (click-drag to move, double-click for slow-mo). Player smooth-follows the pointer position.
-- **Game loop** (lines 536-648): `requestAnimationFrame` → `gameLoop(now)` → `update(dt)` → `render()`. Slow-mo scales dt by 0.3. Difficulty ramps linearly with score (caps at 8).
-- **Rendering** (lines 650-753): Vignette, entity trails, glyph text rendering with colored glow, particle system, player as glowing hexagon with rotating inner shape.
-- **Collision** (lines 498-501, 603-632): Distance-based (`Math.hypot`) between player and entity centers.
+- **`index.html`**: HTML markup only — two canvases (`#rain` for background, `#gameCanvas` for gameplay), three screens (`#titleScreen`, `#hud` + game, `#gameOver`) toggled via `.hidden` class, flash overlay, scanlines. Inline `onclick` handlers reference functions in `game.js`. Loads CrazyGames SDK, `styles.css`, and `game.js`.
+- **`styles.css`**: Matrix-green theme via CSS variables (`--matrix-green`, `--glow`, etc.), screen transitions, HUD, scanline overlay, slow-mo bar, tutorial, pause overlay, wave announcements, near-miss text. Fonts: Share Tech Mono + Orbitron (Google Fonts via `@import`).
+- **`game.js`**: All game logic — CrazyGames SDK wrapper, persistent stats (localStorage), matrix rain background, game state, entity spawning (good/bad/power/splitter/cluster), input (touch + mouse), pause, audio (Web Audio API sfx), tutorial animations, wave system, game loop (`requestAnimationFrame` → `gameLoop` → `update` → `render`), collision (distance-based via `Math.hypot`), rendering (vignette, entity trails, glyph text with glow, particle system, player as layered geometry avatar).
 
 ## Key Game Constants
 
