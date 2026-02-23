@@ -108,7 +108,8 @@
   .hud-wave {
     font-family: 'Orbitron', sans-serif; font-size: 0.65em;
     opacity: 0.6; color: #00ffff;
-    text-shadow: 0 0 6px #00ffff80; margin-top: 2px;
+    text-shadow: 0 0 6px #00ffff80;
+    position: absolute; left: 50%; transform: translateX(-50%);
   }
   #gameCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
   #gameCanvas.hidden { display: none; }
@@ -288,8 +289,8 @@
   <div>
     <div class="hud-score">SCORE: <span id="scoreDisplay">0</span></div>
     <div class="hud-combo" id="comboDisplay"></div>
-    <div class="hud-wave" id="waveDisplay">WAVE 1</div>
   </div>
+  <div class="hud-wave" id="waveDisplay">WAVE 1</div>
   <div><div class="hud-lives" id="livesDisplay"></div></div>
 </div>
 
@@ -627,7 +628,7 @@ function updateLivesUI() {
 function dist(a,b) { return Math.hypot(a.x-b.x, a.y-b.y); }
 
 // ─── TUTORIAL ───
-let tutorialStep = 0, tutorialShown = false, tutAnimFrames = [];
+let tutorialStep = 0, tutorialShown = !!localStorage.getItem('tutDone'), tutAnimFrames = [];
 
 function showTutorial(cb) {
   tutorialStep = 0;
@@ -647,6 +648,7 @@ function updateTutorialStep() {
 function closeTutorial() {
   document.getElementById('tutorial').classList.remove('visible');
   tutorialShown = true;
+  try { localStorage.setItem('tutDone', '1'); } catch(_) {}
   tutAnimFrames.forEach(id => cancelAnimationFrame(id)); tutAnimFrames = [];
   if (window._tutCb) { window._tutCb(); window._tutCb = null; }
 }
