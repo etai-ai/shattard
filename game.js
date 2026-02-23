@@ -303,16 +303,20 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 
 // ─── AUDIO ───
 let audioCtx = null, audioUnlocked = false;
+// Tiny silent WAV for iOS audio session unlock
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
   if (!audioUnlocked) {
-    // Play a silent buffer to unlock audio on iOS
-    const buf = audioCtx.createBuffer(1, 1, 22050);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtx.destination);
-    src.start(0);
+    // HTML5 Audio element unlocks iOS audio session (works past silent switch)
+    const a = new Audio(SILENT_WAV);
+    a.play().catch(() => {});
+    // Also play a silent oscillator into the Web Audio context
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    g.gain.value = 0;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(0); o.stop(audioCtx.currentTime + 0.001);
     audioUnlocked = true;
   }
 }
@@ -324,19 +328,25 @@ function _unlockAudio() {
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
   if (!audioUnlocked) {
-    const buf = audioCtx.createBuffer(1, 1, 22050);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtx.destination);
-    src.start(0);
+    const a = new Audio(SILENT_WAV);
+    a.play().catch(() => {});
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    g.gain.value = 0;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(0); o.stop(audioCtx.currentTime + 0.001);
     audioUnlocked = true;
   }
 }
 document.addEventListener('touchstart', _unlockAudio, { passive: true });
 document.addEventListener('touchend', _unlockAudio, { passive: true });
 document.addEventListener('click', _unlockAudio);
+// Re-resume after tab becomes visible again (iOS suspends audio in background)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+});
 function playTone(freq, dur, vol=0.3, type='sine') {
-  if (!audioCtx || audioCtx.state === 'suspended') return;
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
