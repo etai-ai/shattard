@@ -366,7 +366,7 @@ let currentWave, waveTimer, wavePhase, announceTimer, breatherTimer, waveGlyphsS
 
 const PLAYER_SIZE = 31, MAX_LIVES = 3, TOUCH_Y_OFFSET = -80, SLOW_MO_DURATION = 3000;
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
-const NEAR_MISS_RADIUS = 2.2, NEAR_MISS_SCORE = 25, NEAR_MISS_COOLDOWN = 0.15;
+const NEAR_MISS_RADIUS = 2.2, NEAR_MISS_SCORE = 25;
 
 // ─── WAVE DEFS ───
 const WAVE_DEFS = [
@@ -404,7 +404,7 @@ function spawnGlyph() {
     wobble: Math.random() * Math.PI * 2,
     wobbleSpeed: 0.5 + Math.random() * 2,
     wobbleAmp: isGood ? 0 : (10 + Math.random() * 20),
-    trail: [], nmCd: 0,
+    trail: [], nearMissed: false,
     isSplitter: pat === 'splitter' && !isGood, hasSplit: false,
   };
   if (pat === 'zigzag' && !isGood) { ent.wobbleAmp = 40 + Math.random() * 30; ent.wobbleSpeed = 3 + Math.random() * 2; }
@@ -425,7 +425,7 @@ function spawnCluster(w) {
       alpha: 0.7 + Math.random()*0.3,
       wobble: Math.random()*Math.PI*2, wobbleSpeed: 0.5 + Math.random()*1.5,
       wobbleAmp: 5 + Math.random()*10,
-      trail: [], nmCd: 0, isSplitter: false, hasSplit: false,
+      trail: [], nearMissed: false, isSplitter: false, hasSplit: false,
     });
   }
   waveGlyphsSpawned += count;
@@ -440,7 +440,7 @@ function splitEntity(e) {
       char: CHARS[Math.floor(Math.random()*CHARS.length)], alpha: 0.8,
       wobble: Math.random()*Math.PI*2, wobbleSpeed: 2+Math.random()*3,
       wobbleAmp: 15+Math.random()*20,
-      trail:[], nmCd:0, isSplitter:false, hasSplit:false,
+      trail:[], nearMissed:false, isSplitter:false, hasSplit:false,
     });
   }
   emitParticles(e.x, e.y, '#ff6633', 10);
@@ -451,7 +451,7 @@ function spawnPowerUp() {
     type:'power', x: Math.random()*(W-60)+30, y:-30,
     size:29, speed:1+Math.random(), char:'⬡', alpha:1,
     wobble:0, wobbleSpeed:3, wobbleAmp:15, pulsePhase:0,
-    trail:[], nmCd:0, isSplitter:false, hasSplit:false,
+    trail:[], nearMissed:false, isSplitter:false, hasSplit:false,
   });
 }
 
@@ -542,11 +542,30 @@ function showBreather(dur) {
 function hideBreather() { document.getElementById('breatherBar').classList.remove('visible'); }
 
 // ─── AUDIO ───
-let audioCtx = null;
+let audioCtx = null, audioUnlocked = false;
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioUnlocked) {
+    // Play a silent buffer to unlock audio on iOS
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+    audioUnlocked = true;
+  }
 }
+// Unlock audio on the very first user gesture (iOS requires touchend)
+function _unlockAudio() {
+  initAudio();
+  document.removeEventListener('touchstart', _unlockAudio);
+  document.removeEventListener('touchend', _unlockAudio);
+  document.removeEventListener('click', _unlockAudio);
+}
+document.addEventListener('touchstart', _unlockAudio, { passive: true });
+document.addEventListener('touchend', _unlockAudio, { passive: true });
+document.addEventListener('click', _unlockAudio);
 function playTone(freq, dur, vol=0.3, type='sine') {
   if (!audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -826,7 +845,6 @@ function updateEntities(dt, realDt) {
     e.y += e.speed * 60 * dt;
     e.x += Math.sin(e.wobble) * e.wobbleAmp * dt;
     if (e.type === 'power') e.pulsePhase = (e.pulsePhase||0) + dt*5;
-    if (e.nmCd > 0) e.nmCd -= realDt;
 
     // Splitter
     if (e.isSplitter && !e.hasSplit && e.y > H*0.45) {
@@ -864,11 +882,12 @@ function updateEntities(dt, realDt) {
       }
       entities.splice(i,1);
     }
-    // Near-miss
-    else if (e.type === 'bad' && e.nmCd <= 0) {
+    // Near-miss (once per entity)
+    else if (e.type === 'bad' && !e.nearMissed) {
       const nearDist = hitDist * NEAR_MISS_RADIUS;
       if (d < nearDist && d >= hitDist) {
-        score += NEAR_MISS_SCORE; totalNearMisses++; e.nmCd = NEAR_MISS_COOLDOWN;
+        e.nearMissed = true;
+        score += NEAR_MISS_SCORE; totalNearMisses++;
         emitNearMissParticles(e.x, e.y);
         showNearMissText(e.x, e.y, NEAR_MISS_SCORE);
         flash('nearmiss'); sfxNearMiss();
