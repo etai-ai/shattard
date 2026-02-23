@@ -106,8 +106,8 @@
   }
   .life-pip.lost { background: transparent; box-shadow: none; opacity: 0.3; }
   .hud-wave {
-    font-family: 'Orbitron', sans-serif; font-size: 0.65em;
-    opacity: 0.6; color: #00ffff;
+    font-family: 'Orbitron', sans-serif; font-size: 1.4em; font-weight: 700;
+    color: #00ffff;
     text-shadow: 0 0 6px #00ffff80;
     position: absolute; left: 50%; transform: translateX(-50%);
   }
@@ -478,7 +478,7 @@ function emitNearMissParticles(x,y) {
 }
 
 function initPlayer() {
-  player = { x:W/2, y:H*0.8, targetX:W/2, targetY:H*0.8, size:PLAYER_SIZE, glowPhase:0 };
+  player = { x:W/2, y:H*0.8, targetX:W/2, targetY:H*0.8, size:PLAYER_SIZE, glowPhase:0, orbitPhase:0, radarRing:0 };
 }
 
 // ─── INPUT ───
@@ -798,6 +798,8 @@ function update(dt, realDt) {
   player.x = Math.max(player.size, Math.min(W-player.size, player.x));
   player.y = Math.max(player.size, Math.min(H-player.size, player.y));
   player.glowPhase += dt * 4;
+  player.orbitPhase += dt * (combo > 5 ? 3.5 : 2);
+  if (slowMo) { player.radarRing += dt * 1.5; if (player.radarRing > 1) player.radarRing = 0; } else { player.radarRing = 0; }
 
   // Spawning
   spawnTimer += dt;
@@ -830,6 +832,8 @@ function updateCommon(dt, realDt) {
   player.x = Math.max(player.size, Math.min(W-player.size, player.x));
   player.y = Math.max(player.size, Math.min(H-player.size, player.y));
   player.glowPhase += dt * 4;
+  player.orbitPhase += dt * (combo > 5 ? 3.5 : 2);
+  if (slowMo) { player.radarRing += dt * 1.5; if (player.radarRing > 1) player.radarRing = 0; } else { player.radarRing = 0; }
 
   updateEntities(dt, realDt);
   for (let i=particles.length-1;i>=0;i--) {
@@ -945,21 +949,70 @@ function render() {
     ctx.setLineDash([4,4]); ctx.beginPath(); ctx.arc(player.x,player.y,nzo,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  // Player
+  // Player — layered geometry avatar
   ctx.globalAlpha=1;
-  const glow=8+Math.sin(player.glowPhase)*4;
-  ctx.strokeStyle='#00ff41'; ctx.shadowColor='#00ff41'; ctx.shadowBlur=glow; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(player.x,player.y,player.size,0,Math.PI*2); ctx.stroke();
-  ctx.fillStyle='#00ff4130'; ctx.beginPath();
-  for (let i=0;i<6;i++) {
-    const angle=(Math.PI/3)*i-Math.PI/6+player.glowPhase*0.3, r=player.size*0.7;
-    const px=player.x+Math.cos(angle)*r, py=player.y+Math.sin(angle)*r;
-    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  const px=player.x, py=player.y, ps=player.size, gp=player.glowPhase, op=player.orbitPhase;
+  const comboBoost = combo > 5 ? 1 : 0;
+  const baseGlow = 8 + Math.sin(gp)*4 + comboBoost*6;
+
+  // Slow-mo radar ping
+  if (slowMo && player.radarRing > 0) {
+    const rr = player.radarRing;
+    ctx.globalAlpha = (1-rr)*0.35;
+    ctx.strokeStyle='#00ff41'; ctx.shadowColor='#00ff41'; ctx.shadowBlur=6; ctx.lineWidth=1.5*(1-rr);
+    ctx.beginPath(); ctx.arc(px,py, ps + rr*40, 0, Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
   }
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='#00ff4180'; ctx.lineWidth=1; ctx.stroke();
-  ctx.fillStyle='#00ff41'; ctx.shadowBlur=12;
-  ctx.beginPath(); ctx.arc(player.x,player.y,3,0,Math.PI*2); ctx.fill();
+
+  // Pulsing double outer ring
+  const outerW = 1.5 + Math.sin(gp)*0.6;
+  const innerW = 1.5 + Math.sin(gp+Math.PI)*0.6;
+  ctx.shadowColor='#00ff41'; ctx.shadowBlur=baseGlow;
+  ctx.strokeStyle='#00ff4190'; ctx.lineWidth=outerW;
+  ctx.beginPath(); ctx.arc(px,py, ps+3, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='#00ff4160'; ctx.lineWidth=innerW;
+  ctx.beginPath(); ctx.arc(px,py, ps-1, 0, Math.PI*2); ctx.stroke();
+
+  // Dual counter-rotating hexagons
+  const drawHex = (cx,cy,r,rot,fill,stroke,lw) => {
+    ctx.beginPath();
+    for (let i=0;i<6;i++) { const a=(Math.PI/3)*i+rot; const hx=cx+Math.cos(a)*r, hy=cy+Math.sin(a)*r; i===0?ctx.moveTo(hx,hy):ctx.lineTo(hx,hy); }
+    ctx.closePath();
+    if (fill) { ctx.fillStyle=fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); }
+  };
+  ctx.shadowBlur=baseGlow*0.7;
+  drawHex(px,py, ps*0.78, gp*0.3, '#00ff4118', '#00ff4150', 1);
+  ctx.shadowBlur=baseGlow;
+  drawHex(px,py, ps*0.48, -gp*0.5, '#00ff4130', '#00ff41a0', 1.2);
+
+  // Orbiting energy dots with ghost trails
+  const dotCount=3, dotR=2.2, orbitR=ps*1.25;
+  for (let d=0;d<dotCount;d++) {
+    const baseAngle = op*(1.2+d*0.4) + (Math.PI*2/dotCount)*d;
+    const dr = orbitR + Math.sin(gp+d*2)*2;
+    // Ghost trail (3 positions)
+    for (let t=2;t>=0;t--) {
+      const trailAngle = baseAngle - t*0.18;
+      const tx=px+Math.cos(trailAngle)*dr, ty=py+Math.sin(trailAngle)*dr;
+      ctx.globalAlpha = (1-t*0.3) * (0.3+comboBoost*0.2);
+      ctx.fillStyle='#00ff41'; ctx.shadowBlur=4+comboBoost*4;
+      ctx.beginPath(); ctx.arc(tx,ty, dotR*(1-t*0.2), 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+
+  // Glowing pulsing core
+  const coreR = 2.5 + Math.sin(gp*1.5)*1.2 + comboBoost*0.8;
+  ctx.fillStyle='#00ff41'; ctx.shadowColor='#00ff41'; ctx.shadowBlur=12+comboBoost*6;
+  ctx.beginPath(); ctx.arc(px,py, coreR, 0, Math.PI*2); ctx.fill();
+
+  // Crosshair through center
+  const chLen=ps*0.3;
+  ctx.strokeStyle='#00ff4170'; ctx.lineWidth=0.8; ctx.shadowBlur=0;
+  ctx.beginPath(); ctx.moveTo(px-chLen,py); ctx.lineTo(px+chLen,py); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px,py-chLen); ctx.lineTo(px,py+chLen); ctx.stroke();
+
   ctx.shadowBlur=0; ctx.globalAlpha=1;
 }
 
@@ -979,12 +1032,16 @@ function gameOver() {
   if (fs > highScore) { highScore = fs; CG.saveScore(highScore); }
   document.getElementById('highScoreDisplay').textContent = highScore > 0 ? `HIGH SCORE: ${highScore}` : '';
 
-  setTimeout(() => document.getElementById('gameOver').classList.remove('hidden'), 300);
-  CG.showAd('midgame', {
-    adStarted: () => { if(audioCtx) audioCtx.suspend(); },
-    adFinished: () => { if(audioCtx) audioCtx.resume(); },
-    adError: () => { if(audioCtx) audioCtx.resume(); },
-  });
+  setTimeout(() => {
+    document.getElementById('gameOver').classList.remove('hidden');
+    setTimeout(() => {
+      CG.showAd('midgame', {
+        adStarted: () => { if(audioCtx) audioCtx.suspend(); },
+        adFinished: () => { if(audioCtx) audioCtx.resume(); },
+        adError: () => { if(audioCtx) audioCtx.resume(); },
+      });
+    }, 1500);
+  }, 300);
 }
 
 window.addEventListener('keydown', e => { if (['ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault(); });
