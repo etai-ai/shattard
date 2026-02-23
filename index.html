@@ -349,6 +349,7 @@ let touchStartX, touchStartY, touching = false;
 
 const PLAYER_SIZE = 22;
 const MAX_LIVES = 3;
+const TOUCH_Y_OFFSET = -80; // player renders above finger on touch devices
 const SLOW_MO_DURATION = 3000;
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
 
@@ -430,7 +431,7 @@ gc.addEventListener('touchstart', (e) => {
   touchStartY = t.clientY;
   touching = true;
   player.targetX = t.clientX;
-  player.targetY = t.clientY;
+  player.targetY = t.clientY + TOUCH_Y_OFFSET;
 
   // Double tap detection
   const now = Date.now();
@@ -443,7 +444,7 @@ gc.addEventListener('touchmove', (e) => {
   if (!touching) return;
   const t = e.touches[0];
   player.targetX = t.clientX;
-  player.targetY = t.clientY;
+  player.targetY = t.clientY + TOUCH_Y_OFFSET;
 }, { passive: false });
 
 gc.addEventListener('touchend', () => { touching = false; });
