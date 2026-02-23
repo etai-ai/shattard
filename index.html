@@ -135,11 +135,11 @@
     pointer-events: none;
   }
   #hud.hidden { display: none; }
-  .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; }
+  .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.4em; }
   .hud-combo { color: var(--matrix-bright); font-size: 0.85em; }
-  .hud-lives { display: flex; gap: 4px; }
+  .hud-lives { display: flex; gap: 6px; }
   .life-pip {
-    width: 18px; height: 18px;
+    width: 24px; height: 24px;
     border: 1px solid var(--matrix-green);
     background: var(--matrix-green);
     box-shadow: var(--glow-sm);
@@ -257,7 +257,16 @@
     text-transform: uppercase;
   }
   .slowmo-label.hidden { display: none; }
+  #gameOver .high-score {
+    font-size: clamp(0.7rem, 2.5vw, 1rem);
+    color: var(--matrix-bright);
+    opacity: 0.6;
+    margin-bottom: 1rem;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.1em;
+  }
 </style>
+<script src="https://sdk.crazygames.com/crazygames-sdk-v2.js"></script>
 </head>
 <body>
 
@@ -299,11 +308,60 @@
 <div id="gameOver" class="screen hidden">
   <h2>SYSTEM FAILURE</h2>
   <div class="final-score" id="finalScore">0</div>
+  <div class="high-score" id="highScoreDisplay"></div>
   <div class="stats" id="finalStats"></div>
   <button class="start-btn" onclick="startGame()">REBOOT</button>
 </div>
 
 <script>
+// ─── CRAZYGAMES SDK WRAPPER ───
+const CG = (() => {
+  const sdk = window.CrazyGames?.CrazySDK?.getInstance() ?? window.CrazyGames?.SDK ?? null;
+  const hasSDK = !!sdk;
+
+  return {
+    sdk,
+    gameplayStart() {
+      if (hasSDK && sdk.game) sdk.game.gameplayStart();
+    },
+    gameplayStop() {
+      if (hasSDK && sdk.game) sdk.game.gameplayStop();
+    },
+    happytime() {
+      if (hasSDK && sdk.game) sdk.game.happytime();
+    },
+    showAd(type, callbacks = {}) {
+      if (!hasSDK || !sdk.ad) {
+        if (callbacks.adFinished) callbacks.adFinished();
+        return;
+      }
+      const cb = {
+        adStarted: () => { if (callbacks.adStarted) callbacks.adStarted(); },
+        adFinished: () => { if (callbacks.adFinished) callbacks.adFinished(); },
+        adError: (err) => { if (callbacks.adError) callbacks.adError(err); },
+      };
+      if (type === 'midgame') {
+        sdk.ad.requestAd('midgame', cb);
+      } else {
+        sdk.ad.requestAd(type, cb);
+      }
+    },
+    async saveScore(val) {
+      if (!hasSDK || !sdk.data) return;
+      try { await sdk.data.setItem('highScore', String(val)); } catch (_) {}
+    },
+    async getScore() {
+      if (!hasSDK || !sdk.data) return null;
+      try {
+        const v = await sdk.data.getItem('highScore');
+        return v !== null ? Number(v) : null;
+      } catch (_) { return null; }
+    },
+  };
+})();
+
+let highScore = 0;
+
 // ─── MATRIX RAIN BACKGROUND ───
 const rainCanvas = document.getElementById('rain');
 const rCtx = rainCanvas.getContext('2d');
@@ -469,6 +527,7 @@ gc.addEventListener('mouseup', () => { touching = false; });
 function activateSlowMo() {
   if (slowMoEnergy < 30 || slowMoCooldown > 0) return;
   slowMo = true;
+  sfxSlowMo();
   setTimeout(() => { slowMo = false; }, SLOW_MO_DURATION);
 }
 
@@ -483,6 +542,90 @@ function flash(type) {
 // ─── VIBRATE ───
 function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+// ─── AUDIO ENGINE ───
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, dur, vol = 0.3, type = 'sine') {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+function sfxCollect() {
+  if (!audioCtx) return;
+  playTone(880, 0.12, 0.18, 'sine');
+  playTone(1320, 0.12, 0.1, 'triangle');
+  setTimeout(() => playTone(1760, 0.15, 0.14, 'sine'), 50);
+}
+
+function sfxPowerUp() {
+  if (!audioCtx) return;
+  playTone(660, 0.1, 0.15, 'sine');
+  setTimeout(() => playTone(880, 0.1, 0.15, 'sine'), 60);
+  setTimeout(() => playTone(1320, 0.15, 0.18, 'triangle'), 120);
+}
+
+function sfxHit() {
+  if (!audioCtx) return;
+  playTone(320, 0.15, 0.3, 'sawtooth');
+  playTone(240, 0.2, 0.25, 'square');
+  setTimeout(() => playTone(180, 0.15, 0.2, 'sawtooth'), 60);
+}
+
+function sfxSlowMo() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.5);
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.5);
+}
+
+function sfxDeath() {
+  if (!audioCtx) return;
+  playTone(280, 0.4, 0.3, 'sawtooth');
+  playTone(220, 0.6, 0.25, 'square');
+  setTimeout(() => {
+    playTone(180, 0.4, 0.25, 'sawtooth');
+    playTone(140, 0.5, 0.2, 'square');
+  }, 200);
+  setTimeout(() => playTone(100, 0.6, 0.2, 'square'), 450);
+}
+
+function sfxCombo() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(1200, t);
+  osc.frequency.exponentialRampToValueAtTime(1800, t + 0.08);
+  gain.gain.setValueAtTime(0.12, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + 0.1);
 }
 
 // ─── UPDATE LIVES DISPLAY ───
@@ -510,6 +653,7 @@ function startGame() {
   document.getElementById('slowMoLabel').classList.remove('hidden');
   gc.classList.remove('hidden');
 
+  initAudio();
   resizeGame();
   window.addEventListener('resize', resizeGame);
 
@@ -531,6 +675,10 @@ function startGame() {
 
   initPlayer();
   updateLivesUI();
+
+  CG.gameplayStart();
+  CG.getScore().then(v => { if (v !== null && v > highScore) highScore = v; });
+
   requestAnimationFrame(gameLoop);
 }
 
@@ -612,11 +760,15 @@ function update(dt, realDt) {
         totalCollected++;
         emitParticles(e.x, e.y, '#00ff41', 8);
         flash('collect');
+        sfxCollect();
+        if (combo > 1) sfxCombo();
+        if (combo > 0 && combo % 10 === 0) CG.happytime();
       } else if (e.type === 'power') {
         slowMoEnergy = 100;
         score += 50;
         emitParticles(e.x, e.y, '#00ffff', 15);
         flash('collect');
+        sfxPowerUp();
       } else {
         lives--;
         combo = 0;
@@ -624,7 +776,9 @@ function update(dt, realDt) {
         emitParticles(e.x, e.y, '#ff3333', 20);
         flash('hit');
         vibrate(100);
+        sfxHit();
         if (lives <= 0) {
+          sfxDeath();
           gameOver();
           return;
         }
@@ -756,21 +910,47 @@ function render() {
 // ─── GAME OVER ───
 function gameOver() {
   gameRunning = false;
+  CG.gameplayStop();
+
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('slowMoBar').classList.add('hidden');
   document.getElementById('slowMoLabel').classList.add('hidden');
   gc.classList.add('hidden');
 
-  document.getElementById('finalScore').textContent = Math.floor(score);
+  const finalScore = Math.floor(score);
+  document.getElementById('finalScore').textContent = finalScore;
   document.getElementById('finalStats').innerHTML =
     `GLYPHS COLLECTED: ${totalCollected}<br>` +
     `THREATS DODGED: ${totalDodged}<br>` +
     `MAX COMBO: x${maxCombo}`;
 
+  // High score persistence
+  if (finalScore > highScore) {
+    highScore = finalScore;
+    CG.saveScore(highScore);
+  }
+  document.getElementById('highScoreDisplay').textContent =
+    highScore > 0 ? `HIGH SCORE: ${highScore}` : '';
+
   setTimeout(() => {
     document.getElementById('gameOver').classList.remove('hidden');
   }, 300);
+
+  // Midgame ad between rounds
+  CG.showAd('midgame', {
+    adStarted: () => { if (audioCtx) audioCtx.suspend(); },
+    adFinished: () => { if (audioCtx) audioCtx.resume(); },
+    adError: () => { if (audioCtx) audioCtx.resume(); },
+  });
 }
+
+// ─── PREVENT BROWSER SCROLL (CrazyGames requirement) ───
+window.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
+});
+
+// Load high score on page load
+CG.getScore().then(v => { if (v !== null) highScore = v; });
 </script>
 </body>
 </html>
