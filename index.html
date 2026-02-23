@@ -88,14 +88,14 @@
   }
   #hud {
     position: fixed; top: 0; left: 0; width: 100%; z-index: 20;
-    padding: 1rem 1.2rem; display: flex;
-    justify-content: space-between; align-items: flex-start;
+    padding: 0.7rem 1.2rem; display: flex;
+    justify-content: space-between; align-items: center;
     font-size: clamp(1rem, 3.5vw, 1.3rem);
     background: linear-gradient(180deg, #000a 0%, transparent 100%);
     pointer-events: none;
   }
   #hud.hidden { display: none; }
-  .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.4em; }
+  .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.15em; }
   .hud-combo { color: var(--matrix-bright); font-size: 0.85em; }
   .hud-lives { display: flex; gap: 6px; }
   .life-pip {
@@ -106,10 +106,10 @@
   }
   .life-pip.lost { background: transparent; box-shadow: none; opacity: 0.3; }
   .hud-wave {
-    font-family: 'Orbitron', sans-serif; font-size: 1.4em; font-weight: 700;
+    font-family: 'Orbitron', sans-serif; font-size: 1.1em; font-weight: 700;
     color: #00ffff;
     text-shadow: 0 0 6px #00ffff80;
-    position: absolute; left: 50%; transform: translateX(-50%);
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   }
   #gameCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
   #gameCanvas.hidden { display: none; }
