@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Lumina Loop</title>
+<title>SHATTARD Loop</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Exo+2:wght@300;400;600&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
@@ -12,9 +12,8 @@ canvas{display:block;width:100vw;height:100dvh}
 
 #hud{position:absolute;top:0;left:0;right:0;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10}
 #score-display{text-align:left}
-#score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:32px;color:#fff;text-shadow:0 0 20px rgba(255,255,255,0.5);letter-spacing:2px}
-#speed-label{font-family:'Exo 2',sans-serif;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase}
-#color-indicator{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);box-shadow:0 0 15px currentColor;transition:all 0.3s}
+#score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:48px;color:#fff;text-shadow:0 0 20px rgba(255,255,255,0.5);letter-spacing:2px}
+#speed-label{font-family:'Exo 2',sans-serif;font-size:16px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase}
 #size-bar-wrap{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:120px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;z-index:10;pointer-events:none}
 #size-bar{height:100%;border-radius:2px;transition:width 0.3s;width:10%}
 
@@ -41,13 +40,13 @@ canvas{display:block;width:100vw;height:100dvh}
     <div id="score-val">0</div>
     <div id="speed-label">SPEED ×1.0</div>
   </div>
-  <div id="color-indicator"></div>
+  <div id="lives-display" style="font-family:'Orbitron',sans-serif;font-size:48px;color:#ff3366;text-shadow:0 0 10px rgba(255,51,102,0.5);letter-spacing:4px"></div>
 </div>
 
 <div id="size-bar-wrap"><div id="size-bar"></div></div>
 
 <div id="overlay">
-  <div id="overlay-title" style="background:linear-gradient(90deg,#ff3366,#33ccff,#66ff99);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">LUMINA LOOP</div>
+  <div id="overlay-title" style="background:linear-gradient(90deg,#ff3366,#33ccff,#66ff99);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">SHATTARD</div>
   <div id="overlay-sub">survival dash</div>
   <div id="final-score-row" style="display:none">
     <div id="final-score-label">DISTANCE</div>
@@ -104,6 +103,9 @@ let screenFlash = { alpha: 0, color: '#fff' };
 let cameraShake = { x: 0, y: 0, t: 0 };
 let deathAnim = 0;
 let dragging = false;
+let lives = 3;
+let invincibleTimer = 0;
+const INVINCIBLE_DURATION = 1.5;
 
 // --- AUDIO ---
 let audioCtx = null;
@@ -268,6 +270,7 @@ function drawEntities() {
 // --- PLAYER ---
 function drawPlayer() {
   if (deathAnim > 0) return; // handled in death particles
+  if (invincibleTimer > 0 && Math.sin(gameTime * 20) > 0.3) return; // flashing
   const pc = getPlayerColor();
   const tubeR = Math.min(W, H) * TUBE_RADIUS;
   const pR = tubeR * 0.82;
@@ -419,7 +422,7 @@ function checkCollisions() {
         sfxPrism();
         screenFlash.alpha = 0.4;
         screenFlash.color = NEON_COLORS[newIdx].hex;
-        updateColorIndicator();
+
       }
       continue;
     }
@@ -448,9 +451,23 @@ function checkCollisions() {
           cameraShake.t = 0.15;
         }
       } else if (e.type === 'dark') {
-        // Death!
+        if (invincibleTimer > 0) continue;
         e.collected = true;
-        die();
+        lives--;
+        updateLivesDisplay();
+        if (lives <= 0) {
+          die();
+        } else {
+          // Lose a life, become invincible briefly
+          invincibleTimer = INVINCIBLE_DURATION;
+          sfxWrong();
+          screenFlash.alpha = 0.3;
+          screenFlash.color = '#ff0040';
+          cameraShake.t = 0.25;
+          playerSize = Math.max(0.5, playerSize - 0.2);
+          const pos = getEntityScreenPos(e.angle, e.depth);
+          spawnCollectParticles(pos.x, pos.y, { h: 340, s: 100, l: 60 }, 12);
+        }
       }
     }
   }
@@ -476,7 +493,7 @@ function die() {
     document.getElementById('final-score-row').style.display = '';
     document.getElementById('final-score-val').textContent = score;
     document.getElementById('best-row').textContent = `BEST: ${bestScore}`;
-    document.getElementById('overlay-title').textContent = 'SHATTERED';
+    document.getElementById('overlay-title').textContent = 'SHATTARD';
     document.getElementById('overlay-title').style.background = 'linear-gradient(90deg,#ff0044,#ff3366)';
     document.getElementById('overlay-title').style.webkitBackgroundClip = 'text';
     document.getElementById('overlay-title').style.backgroundClip = 'text';
@@ -515,6 +532,9 @@ function update(dt) {
 
   // Size decay
   playerSize = Math.max(0.5, playerSize - dt * 0.02);
+
+  // Invincibility timer
+  if (invincibleTimer > 0) invincibleTimer -= dt;
 
   // Move entities toward camera
   const moveSpeed = 200 * speed;
@@ -584,13 +604,10 @@ function updateParticles(dt) {
   particles = particles.filter(p => p.life > 0);
 }
 
-function updateColorIndicator() {
-  const ci = document.getElementById('color-indicator');
-  const pc = getPlayerColor();
-  ci.style.background = pc.hex;
-  ci.style.color = pc.hex;
-  ci.style.boxShadow = `0 0 15px ${pc.hex}`;
+function updateLivesDisplay() {
+  document.getElementById('lives-display').textContent = '\u2665'.repeat(lives);
 }
+
 
 // --- RENDER ---
 function render() {
@@ -696,10 +713,12 @@ function startGame() {
   deathAnim = 0;
   screenFlash = { alpha: 0, color: '#fff' };
   cameraShake = { x: 0, y: 0, t: 0 };
+  lives = 3;
+  invincibleTimer = 0;
   gameActive = true;
   dragging = false;
-  updateColorIndicator();
-  document.getElementById('overlay').classList.add('hidden');
+  updateLivesDisplay();
+    document.getElementById('overlay').classList.add('hidden');
   if (!instructionsShown) {
     document.getElementById('instructions').classList.remove('hidden');
     instructionsShown = true;
@@ -725,7 +744,7 @@ resize();
 try { bestScore = parseInt(localStorage.getItem('lumina_best') || '0'); } catch(e) {}
 document.getElementById('best-row').textContent = bestScore > 0 ? `BEST: ${bestScore}` : '';
 
-updateColorIndicator();
+updateLivesDisplay();
 requestAnimationFrame(loop);
 </script>
 </body>
