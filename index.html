@@ -2,819 +2,774 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SHATTARD Loop</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SHATTARD: AWAKEN</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Exo+2:wght@300;400;600&display=swap');
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
-canvas{display:block;width:100vw;height:100dvh}
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
 
-#hud{position:absolute;top:0;left:0;right:0;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10}
-#score-display{text-align:left}
-#score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:48px;color:#fff;text-shadow:0 0 20px rgba(255,255,255,0.5);letter-spacing:2px}
-#speed-label{font-family:'Exo 2',sans-serif;font-size:16px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase}
-#size-bar-wrap{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:120px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;z-index:10;pointer-events:none}
-#size-bar{height:100%;border-radius:2px;transition:width 0.3s;width:10%}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;background:rgba(0,0,0,0.85);transition:opacity 0.5s}
-#overlay.hidden{opacity:0;pointer-events:none}
-#overlay-title{font-family:'Orbitron',sans-serif;font-weight:900;font-size:28px;letter-spacing:6px;margin-bottom:4px}
-#overlay-sub{font-family:'Exo 2',sans-serif;font-size:13px;color:rgba(255,255,255,0.3);letter-spacing:4px;margin-bottom:30px;text-transform:uppercase}
-#final-score-row{margin-bottom:24px;text-align:center}
-#final-score-label{font-family:'Exo 2',sans-serif;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:3px}
-#final-score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:48px;color:#fff;text-shadow:0 0 30px rgba(255,255,255,0.4)}
-#best-row{font-family:'Exo 2',sans-serif;font-size:12px;color:rgba(255,255,255,0.25);letter-spacing:2px;margin-bottom:32px}
-.play-btn{font-family:'Orbitron',sans-serif;font-weight:600;font-size:14px;letter-spacing:4px;padding:14px 40px;border:1px solid rgba(255,255,255,0.15);border-radius:30px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);cursor:pointer;transition:all 0.3s;text-transform:uppercase}
-.play-btn:active{transform:scale(0.95);background:rgba(255,255,255,0.1)}
+  :root {
+    --matrix-green: #00ff41;
+    --matrix-dark: #003b00;
+    --matrix-dim: #0a3a0a;
+    --matrix-bright: #7dff7d;
+    --matrix-bg: #000a00;
+    --glow: 0 0 10px #00ff41, 0 0 20px #00ff4180, 0 0 40px #00ff4140;
+    --glow-sm: 0 0 5px #00ff41, 0 0 10px #00ff4180;
+  }
 
-#instructions{font-family:'Exo 2',sans-serif;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;position:absolute;bottom:40px;text-align:center;width:100%;pointer-events:none;z-index:10;transition:opacity 1s}
-#instructions.hidden{opacity:0}
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--matrix-green);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  canvas#rain {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.35;
+  }
+
+  /* SCREENS */
+  .screen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.8s;
+    background: radial-gradient(ellipse at center, #001a00 0%, #000 70%);
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* TITLE SCREEN */
+  #titleScreen h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(2rem, 8vw, 4rem);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-shadow: var(--glow);
+    animation: titlePulse 3s ease-in-out infinite;
+    text-align: center;
+  }
+  #titleScreen .subtitle {
+    font-size: clamp(0.7rem, 2.5vw, 1rem);
+    color: var(--matrix-bright);
+    opacity: 0.6;
+    margin-top: 0.5rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  @keyframes titlePulse {
+    0%, 100% { text-shadow: var(--glow); opacity: 1; }
+    50% { text-shadow: 0 0 20px #00ff41, 0 0 40px #00ff41, 0 0 80px #00ff41; opacity: 0.85; }
+  }
+
+  .start-btn {
+    margin-top: 3rem;
+    padding: 1rem 3rem;
+    background: transparent;
+    border: 1px solid var(--matrix-green);
+    color: var(--matrix-green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    animation: btnFlicker 4s infinite;
+  }
+  .start-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, #00ff4120, transparent);
+    transition: left 0.5s;
+  }
+  .start-btn:active::before { left: 100%; }
+  .start-btn:active {
+    background: #00ff4120;
+    box-shadow: var(--glow);
+  }
+  @keyframes btnFlicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.4; }
+    97% { opacity: 1; }
+    98% { opacity: 0.6; }
+  }
+
+  .instructions {
+    margin-top: 2rem;
+    font-size: clamp(0.6rem, 2vw, 0.8rem);
+    opacity: 0.4;
+    text-align: center;
+    line-height: 1.8;
+    max-width: 80%;
+  }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    z-index: 20;
+    padding: 0.8rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+    background: linear-gradient(180deg, #000a 0%, transparent 100%);
+    pointer-events: none;
+  }
+  #hud.hidden { display: none; }
+  .hud-score { text-shadow: var(--glow-sm); font-family: 'Orbitron', sans-serif; font-weight: 700; }
+  .hud-combo { color: var(--matrix-bright); font-size: 0.75em; }
+  .hud-lives { display: flex; gap: 4px; }
+  .life-pip {
+    width: 12px; height: 12px;
+    border: 1px solid var(--matrix-green);
+    background: var(--matrix-green);
+    box-shadow: var(--glow-sm);
+    transition: all 0.3s;
+  }
+  .life-pip.lost { background: transparent; box-shadow: none; opacity: 0.3; }
+
+  /* GAME CANVAS */
+  #gameCanvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 5;
+  }
+  #gameCanvas.hidden { display: none; }
+
+  /* GAME OVER */
+  #gameOver h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.5rem, 6vw, 3rem);
+    font-weight: 900;
+    text-shadow: var(--glow);
+    color: #ff3333;
+  }
+  #gameOver .final-score {
+    font-size: clamp(2rem, 8vw, 4rem);
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    margin: 1.5rem 0;
+    text-shadow: var(--glow);
+  }
+  #gameOver .stats {
+    font-size: 0.8rem;
+    opacity: 0.5;
+    margin-bottom: 2rem;
+    text-align: center;
+    line-height: 2;
+  }
+
+  /* FLASH EFFECTS */
+  #flashOverlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.05s;
+  }
+  #flashOverlay.hit {
+    background: radial-gradient(circle, #ff000040, #ff000010);
+    opacity: 1;
+    animation: flashHit 0.3s forwards;
+  }
+  #flashOverlay.collect {
+    background: radial-gradient(circle, #00ff4130, transparent);
+    opacity: 1;
+    animation: flashCollect 0.2s forwards;
+  }
+  @keyframes flashHit {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes flashCollect {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* SCANLINE OVERLAY */
+  #scanlines {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 25;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      #00000015 2px,
+      #00000015 4px
+    );
+  }
+
+  /* SLOW-MO INDICATOR */
+  #slowMoBar {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40%;
+    height: 4px;
+    background: #00ff4120;
+    border-radius: 2px;
+    z-index: 20;
+    overflow: hidden;
+  }
+  #slowMoBar.hidden { display: none; }
+  #slowMoFill {
+    height: 100%;
+    background: var(--matrix-green);
+    box-shadow: var(--glow-sm);
+    transition: width 0.1s;
+    border-radius: 2px;
+  }
+  .slowmo-label {
+    position: fixed;
+    bottom: 1.8rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.55rem;
+    letter-spacing: 0.3em;
+    opacity: 0.4;
+    z-index: 20;
+    text-transform: uppercase;
+  }
+  .slowmo-label.hidden { display: none; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
 
-<div id="hud">
-  <div id="score-display">
-    <div id="score-val">0</div>
-    <div id="speed-label">SPEED ×1.0</div>
+<canvas id="rain"></canvas>
+<div id="scanlines"></div>
+<div id="flashOverlay"></div>
+
+<!-- TITLE SCREEN -->
+<div id="titleScreen" class="screen">
+  <h1>SHATTARD</h1>
+  <div class="subtitle">awaken</div>
+  <button class="start-btn" onclick="startGame()">IN</button>
+  <div class="instructions">
+    SWIPE or DRAG to move<br>
+    COLLECT green glyphs // DODGE red threats<br>
+    DOUBLE TAP for bullet time
   </div>
-  <div id="lives-display" style="font-family:'Orbitron',sans-serif;font-size:48px;color:#ff3366;text-shadow:0 0 10px rgba(255,51,102,0.5);letter-spacing:4px"></div>
 </div>
 
-<div id="size-bar-wrap"><div id="size-bar"></div></div>
-
-<div id="overlay">
-  <div id="overlay-title" style="background:linear-gradient(90deg,#ff3366,#33ccff,#66ff99);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">SHATTARD</div>
-  <div id="overlay-sub">survival dash</div>
-  <div id="final-score-row" style="display:none">
-    <div id="final-score-label">DISTANCE</div>
-    <div id="final-score-val">0</div>
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div>
+    <div class="hud-score">SCORE: <span id="scoreDisplay">0</span></div>
+    <div class="hud-combo" id="comboDisplay"></div>
   </div>
-  <div id="how-to-play" style="font-family:'Exo 2',sans-serif;font-size:13px;color:rgba(255,255,255,0.4);letter-spacing:1px;line-height:2;margin-bottom:24px;text-align:center">
-    <div style="color:rgba(255,255,255,0.2);font-size:11px;letter-spacing:3px;margin-bottom:8px;text-transform:uppercase">HOW TO PLAY</div>
-    <div id="how-to-controls"></div>
-    <div style="margin-top:8px;color:rgba(255,255,255,0.25)">collect <span style="color:#39ff14">matching</span> sparks · avoid <span style="color:#ff3366">dark matter</span></div>
+  <div>
+    <div class="hud-lives" id="livesDisplay"></div>
   </div>
-  <div id="best-row"></div>
-  <button class="play-btn" id="play-btn">PLAY</button>
 </div>
 
-<div id="instructions"></div>
+<!-- SLOW-MO BAR -->
+<div id="slowMoBar" class="hidden"><div id="slowMoFill" style="width:100%"></div></div>
+<div class="slowmo-label hidden" id="slowMoLabel">BULLET TIME</div>
+
+<!-- GAME CANVAS -->
+<canvas id="gameCanvas" class="hidden"></canvas>
+
+<!-- GAME OVER -->
+<div id="gameOver" class="screen hidden">
+  <h2>SYSTEM FAILURE</h2>
+  <div class="final-score" id="finalScore">0</div>
+  <div class="stats" id="finalStats"></div>
+  <button class="start-btn" onclick="startGame()">REBOOT</button>
+</div>
 
 <script>
-const C = document.getElementById('c');
-const X = C.getContext('2d');
+// ─── MATRIX RAIN BACKGROUND ───
+const rainCanvas = document.getElementById('rain');
+const rCtx = rainCanvas.getContext('2d');
+let rainCols, drops;
 
-// --- CONFIG ---
-const TUBE_RADIUS = 0.42; // fraction of screen width
-const PLAYER_BASE_SIZE = 0.04;
-const SPARK_SIZE = 0.015;
-const DARK_MATTER_SIZE = 0.035;
-const PRISM_GATE_DEPTH = 120;
-const SPAWN_INTERVAL_BASE = 0.4; // seconds between spawns
-const SPEED_INCREASE = 0.008; // per second
-
-// Colors — neon on black
-const NEON_COLORS = [
-  { h: 340, s: 100, l: 60, hex: '#ff3366', name: 'pink' },
-  { h: 180, s: 100, l: 50, hex: '#00e5ff', name: 'cyan' },
-  { h: 130, s: 100, l: 55, hex: '#39ff14', name: 'green' },
-  { h: 45,  s: 100, l: 55, hex: '#ffcc00', name: 'gold' },
-  { h: 270, s: 100, l: 65, hex: '#b84dff', name: 'violet' },
-];
-
-// --- STATE ---
-let W, H, cx, cy, dpr;
-let gameActive = false;
-let score = 0;
-let bestScore = 0;
-let speed = 1;
-let playerAngle = 0; // radians, position on tube ring
-let playerSize = 1; // multiplier
-let playerColorIdx = 0;
-let playerTrail = [];
-let playerSquish = { x: 1, y: 1 }; // stretch/squash
-let entities = []; // sparks, dark matter, prism gates
-let particles = [];
-let shockwaves = [];
-let tubeSegments = [];
-let tubeZ = 0;
-let spawnTimer = 0;
-let prismTimer = 0;
-let gameTime = 0;
-let instructionsShown = false;
-let screenFlash = { alpha: 0, color: '#fff' };
-let cameraShake = { x: 0, y: 0, t: 0 };
-let deathAnim = 0;
-let dragging = false;
-let lives = 3;
-let invincibleTimer = 0;
-const INVINCIBLE_DURATION = 1.5;
-
-// --- AUDIO ---
-let audioCtx = null;
-function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-function playTone(freq, dur, vol, type) {
-  if (!audioCtx) return;
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = type || 'sine'; o.frequency.value = freq;
-  g.gain.setValueAtTime(vol || 0.05, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-  o.connect(g); g.connect(audioCtx.destination);
-  o.start(); o.stop(audioCtx.currentTime + dur);
+function initRain() {
+  rainCanvas.width = window.innerWidth;
+  rainCanvas.height = window.innerHeight;
+  const fontSize = 14;
+  rainCols = Math.floor(rainCanvas.width / fontSize);
+  drops = Array.from({ length: rainCols }, () => Math.random() * rainCanvas.height / fontSize);
 }
-function sfxCollect() { playTone(660 + Math.random()*100, 0.2, 0.07, 'sine'); playTone(990, 0.15, 0.05, 'triangle'); setTimeout(()=>playTone(1320+Math.random()*200,0.15,0.04,'sine'),50); setTimeout(()=>playTone(1760,0.1,0.03,'triangle'),100); }
-function sfxWrong() { playTone(150, 0.3, 0.08, 'sawtooth'); playTone(120, 0.2, 0.06, 'square'); }
-function sfxPrism() { playTone(660, 0.3, 0.05, 'sine'); playTone(990, 0.2, 0.04, 'triangle'); setTimeout(()=>playTone(1320,0.2,0.03,'sine'),100); }
-function sfxDeath() { playTone(80, 0.8, 0.1, 'sawtooth'); playTone(60, 1, 0.08, 'square'); }
 
-// --- HELPERS ---
-function hsl(h, s, l, a) { return a !== undefined ? `hsla(${h},${s}%,${l}%,${a})` : `hsl(${h},${s}%,${l}%)`; }
-function lerp(a, b, t) { return a + (b - a) * t; }
-function angleDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI*2; while (d < -Math.PI) d += Math.PI*2; return d; }
-
-function getPlayerColor() { return NEON_COLORS[playerColorIdx]; }
-
-// --- TUBE RENDERING ---
-function drawTube() {
-  const pc = getPlayerColor();
-  const tubeR = Math.min(W, H) * TUBE_RADIUS;
-  const segments = 40;
-  const depthFade = 0.97;
-
-  // Draw rings from back to front
-  for (let i = segments; i >= 0; i--) {
-    const t = i / segments;
-    const z = t; // 0 = front, 1 = back
-    const scale = 1 / (1 + z * 3);
-    const r = tubeR * scale;
-    const alpha = (1 - z) * 0.25;
-    const pulsePhase = gameTime * 3 + i * 0.3;
-    const pulse = 1 + Math.sin(pulsePhase) * 0.03 * speed;
-
-    const ox = cx + cameraShake.x;
-    const oy = cy + cameraShake.y;
-
-    // Tube ring
-    X.beginPath();
-    X.arc(ox, oy, r * pulse, 0, Math.PI * 2);
-    X.strokeStyle = hsl(pc.h, 60, 40, alpha * 0.5);
-    X.lineWidth = (1 + (1-z) * 2) * dpr;
-    X.stroke();
-
-    // Grid lines (vertical stripes on tube)
-    if (i % 4 === 0) {
-      const gridAlpha = alpha * 0.3;
-      for (let a = 0; a < 12; a++) {
-        const angle = (a / 12) * Math.PI * 2 + tubeZ * 0.01;
-        const x1 = ox + Math.cos(angle) * r * pulse;
-        const y1 = oy + Math.sin(angle) * r * pulse;
-        X.beginPath();
-        X.arc(x1, y1, 1.5 * dpr, 0, Math.PI * 2);
-        X.fillStyle = hsl(pc.h, 50, 50, gridAlpha);
-        X.fill();
-      }
-    }
+function drawRain() {
+  rCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  rCtx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+  rCtx.fillStyle = '#00ff41';
+  rCtx.font = '14px Share Tech Mono';
+  const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789';
+  for (let i = 0; i < drops.length; i++) {
+    const ch = chars[Math.floor(Math.random() * chars.length)];
+    rCtx.fillText(ch, i * 14, drops[i] * 14);
+    if (drops[i] * 14 > rainCanvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
   }
-
-  // Glow at center (vanishing point)
-  const grad = X.createRadialGradient(cx, cy, 0, cx, cy, tubeR * 0.15);
-  grad.addColorStop(0, hsl(pc.h, 80, 60, 0.15));
-  grad.addColorStop(1, 'transparent');
-  X.fillStyle = grad;
-  X.fillRect(0, 0, W, H);
+  requestAnimationFrame(drawRain);
 }
 
-// --- ENTITY RENDERING ---
-function getEntityScreenPos(angle, depth) {
-  const tubeR = Math.min(W, H) * TUBE_RADIUS;
-  const z = depth / 500;
-  const scale = 1 / (1 + z * 3);
-  const r = tubeR * scale;
-  const x = cx + Math.cos(angle) * r + cameraShake.x;
-  const y = cy + Math.sin(angle) * r + cameraShake.y;
-  return { x, y, scale };
+initRain();
+drawRain();
+window.addEventListener('resize', initRain);
+
+// ─── GAME STATE ───
+const gc = document.getElementById('gameCanvas');
+const ctx = gc.getContext('2d');
+let W, H;
+let player, entities, particles, score, combo, maxCombo, lives, gameRunning;
+let slowMo, slowMoEnergy, slowMoCooldown;
+let difficulty, spawnTimer, lastTime, elapsed;
+let totalCollected, totalDodged;
+let lastTap = 0;
+let touchStartX, touchStartY, touching = false;
+
+const PLAYER_SIZE = 22;
+const MAX_LIVES = 3;
+const SLOW_MO_DURATION = 3000;
+const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+
+function resizeGame() {
+  W = gc.width = window.innerWidth;
+  H = gc.height = window.innerHeight;
 }
 
-function drawEntities() {
-  // Sort by depth (far first)
-  const sorted = [...entities].sort((a, b) => b.depth - a.depth);
-
-  for (const e of sorted) {
-    if (e.depth < -20 || e.depth > 500) continue;
-    const pos = getEntityScreenPos(e.angle, e.depth);
-    const baseSize = e.type === 'spark' ? SPARK_SIZE : (e.type === 'dark' ? DARK_MATTER_SIZE : 0.05);
-    const sz = W * baseSize * pos.scale;
-    if (sz < 1) continue;
-
-    if (e.type === 'spark') {
-      const c = NEON_COLORS[e.colorIdx];
-      // Glow
-      X.save();
-      X.shadowColor = c.hex;
-      X.shadowBlur = sz * 2;
-      X.beginPath();
-      X.arc(pos.x, pos.y, sz, 0, Math.PI * 2);
-      X.fillStyle = hsl(c.h, c.s, c.l, 0.9);
-      X.fill();
-      X.restore();
-      // Core
-      X.beginPath();
-      X.arc(pos.x, pos.y, sz * 0.5, 0, Math.PI * 2);
-      X.fillStyle = hsl(c.h, 60, 85, 0.8);
-      X.fill();
-
-    } else if (e.type === 'dark') {
-      // Dark matter — menacing void
-      const pulseR = sz * (1 + Math.sin(gameTime * 8 + e.angle) * 0.15);
-      X.save();
-      X.shadowColor = '#660033';
-      X.shadowBlur = sz * 1.5;
-      // Outer crackling
-      X.beginPath();
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + gameTime * 2;
-        const wobble = 1 + Math.sin(gameTime * 12 + i * 2.5) * 0.25;
-        const px = pos.x + Math.cos(a) * pulseR * wobble;
-        const py = pos.y + Math.sin(a) * pulseR * wobble;
-        if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
-      }
-      X.closePath();
-      X.fillStyle = 'rgba(40,0,20,0.8)';
-      X.fill();
-      X.strokeStyle = 'rgba(200,0,80,0.5)';
-      X.lineWidth = 1.5 * dpr;
-      X.stroke();
-      X.restore();
-      // Inner void
-      X.beginPath();
-      X.arc(pos.x, pos.y, sz * 0.4, 0, Math.PI * 2);
-      X.fillStyle = '#000';
-      X.fill();
-
-    } else if (e.type === 'prism') {
-      // Prism gate — rainbow ring
-      const ringR = W * TUBE_RADIUS * pos.scale * 0.9;
-      X.save();
-      X.globalAlpha = Math.max(0, 1 - Math.abs(e.depth) / 200) * 0.7;
-      X.beginPath();
-      X.arc(cx + cameraShake.x, cy + cameraShake.y, ringR, 0, Math.PI * 2);
-      const prismGrad = X.createConicGradient(gameTime * 2, cx, cy);
-      for (let i = 0; i <= 5; i++) {
-        prismGrad.addColorStop(i / 5, NEON_COLORS[i % 5].hex);
-      }
-      X.strokeStyle = prismGrad;
-      X.lineWidth = (6 + Math.sin(gameTime * 5) * 2) * dpr * pos.scale;
-      X.stroke();
-      X.restore();
-    }
-  }
+// ─── ENTITY TYPES ───
+function spawnGlyph() {
+  const isGood = Math.random() < 0.45;
+  const size = isGood ? 18 : (14 + Math.random() * 10);
+  const speed = (1.5 + difficulty * 0.4 + Math.random() * 1.5) * (isGood ? 0.8 : 1);
+  entities.push({
+    type: isGood ? 'good' : 'bad',
+    x: Math.random() * (W - 40) + 20,
+    y: -30,
+    size,
+    speed,
+    char: CHARS[Math.floor(Math.random() * CHARS.length)],
+    alpha: 0.7 + Math.random() * 0.3,
+    wobble: Math.random() * Math.PI * 2,
+    wobbleSpeed: 0.5 + Math.random() * 2,
+    wobbleAmp: isGood ? 0 : (10 + Math.random() * 20),
+    trail: [],
+  });
 }
 
-// --- PLAYER ---
-function drawPlayer() {
-  if (deathAnim > 0) return; // handled in death particles
-  if (invincibleTimer > 0 && Math.sin(gameTime * 20) > 0.3) return; // flashing
-  const pc = getPlayerColor();
-  const tubeR = Math.min(W, H) * TUBE_RADIUS;
-  const pR = tubeR * 0.82;
-  const px = cx + Math.cos(playerAngle) * pR + cameraShake.x;
-  const py = cy + Math.sin(playerAngle) * pR + cameraShake.y;
-  const sz = W * PLAYER_BASE_SIZE * (0.8 + playerSize * 0.2);
-
-  // Trail
-  playerTrail.unshift({ x: px, y: py, life: 1 });
-  if (playerTrail.length > 25) playerTrail.pop();
-  for (let i = playerTrail.length - 1; i >= 1; i--) {
-    const t = playerTrail[i];
-    const alpha = t.life * 0.4;
-    const r = sz * t.life * 0.6;
-    X.beginPath();
-    X.arc(t.x, t.y, r, 0, Math.PI * 2);
-    X.fillStyle = hsl(pc.h, pc.s, pc.l, alpha);
-    X.fill();
-    t.life -= 0.04;
-  }
-  playerTrail = playerTrail.filter(t => t.life > 0);
-
-  // Main body — fluid blob
-  X.save();
-  X.translate(px, py);
-  X.scale(playerSquish.x, playerSquish.y);
-
-  // Outer glow
-  X.shadowColor = pc.hex;
-  X.shadowBlur = sz * 3;
-  X.beginPath();
-  // Wobbly circle
-  const wobblePoints = 12;
-  for (let i = 0; i <= wobblePoints; i++) {
-    const a = (i / wobblePoints) * Math.PI * 2;
-    const wobble = 1 + Math.sin(gameTime * 6 + a * 3) * 0.08 + Math.sin(gameTime * 10 + a * 5) * 0.04;
-    const r = sz * wobble;
-    const ex = Math.cos(a) * r, ey = Math.sin(a) * r;
-    if (i === 0) X.moveTo(ex, ey); else X.lineTo(ex, ey);
-  }
-  X.closePath();
-  X.fillStyle = hsl(pc.h, pc.s, pc.l, 0.7);
-  X.fill();
-  X.shadowBlur = 0;
-
-  // Inner bright core
-  const coreGrad = X.createRadialGradient(-sz*0.15, -sz*0.15, 0, 0, 0, sz * 0.7);
-  coreGrad.addColorStop(0, hsl(pc.h, 60, 90, 0.8));
-  coreGrad.addColorStop(0.5, hsl(pc.h, pc.s, pc.l + 10, 0.5));
-  coreGrad.addColorStop(1, 'transparent');
-  X.beginPath();
-  X.arc(0, 0, sz * 0.7, 0, Math.PI * 2);
-  X.fillStyle = coreGrad;
-  X.fill();
-
-  X.restore();
+function spawnPowerUp() {
+  entities.push({
+    type: 'power',
+    x: Math.random() * (W - 60) + 30,
+    y: -30,
+    size: 20,
+    speed: 1 + Math.random(),
+    char: '⬡',
+    alpha: 1,
+    wobble: 0, wobbleSpeed: 3, wobbleAmp: 15,
+    pulsePhase: 0,
+    trail: [],
+  });
 }
 
-// --- PARTICLES ---
-function drawParticles() {
-  for (const p of particles) {
-    if (p.life <= 0) continue;
-    const alpha = p.life * (p.maxAlpha || 0.8);
-    const sz = p.size * (p.shrink ? p.life : 1);
-    X.beginPath();
-    X.arc(p.x, p.y, sz, 0, Math.PI * 2);
-    X.fillStyle = hsl(p.h, p.s, p.l, alpha);
-    X.fill();
-  }
-}
-
-function drawShockwaves() {
-  for (const s of shockwaves) {
-    if (s.life <= 0) continue;
-    X.beginPath();
-    X.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    X.strokeStyle = hsl(s.h, s.s, s.l, s.life * 0.7);
-    X.lineWidth = (3 + s.life * 4) * dpr;
-    X.stroke();
-  }
-}
-
-function spawnCollectParticles(x, y, color, count) {
+// ─── PARTICLES ───
+function emitParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const spd = 80 + Math.random() * 250;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
     particles.push({
       x, y,
-      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-      size: (3 + Math.random() * 6) * dpr,
-      life: 1, decay: 1.2 + Math.random() * 0.8,
-      h: color.h + (Math.random()-0.5)*30, s: color.s, l: color.l + Math.random()*30,
-      shrink: true, maxAlpha: 1,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 0.5 + Math.random() * 0.5,
+      color,
+      size: 1 + Math.random() * 3,
+      char: Math.random() > 0.5 ? CHARS[Math.floor(Math.random() * CHARS.length)] : null,
     });
   }
 }
 
-function spawnDeathParticles() {
-  const pc = getPlayerColor();
-  const tubeR = Math.min(W, H) * TUBE_RADIUS;
-  const pR = tubeR * 0.82;
-  const px = cx + Math.cos(playerAngle) * pR;
-  const py = cy + Math.sin(playerAngle) * pR;
-  for (let i = 0; i < 60; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const spd = 80 + Math.random() * 300;
-    particles.push({
-      x: px, y: py,
-      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-      size: (3 + Math.random() * 8) * dpr,
-      life: 1, decay: 0.6 + Math.random() * 0.6,
-      h: pc.h + (Math.random()-0.5)*40, s: pc.s, l: pc.l + Math.random()*20,
-      shrink: true, maxAlpha: 1,
-    });
+// ─── PLAYER ───
+function initPlayer() {
+  player = {
+    x: W / 2,
+    y: H * 0.8,
+    targetX: W / 2,
+    targetY: H * 0.8,
+    size: PLAYER_SIZE,
+    glowPhase: 0,
+  };
+}
+
+// ─── INPUT ───
+gc.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touching = true;
+  player.targetX = t.clientX;
+  player.targetY = t.clientY;
+
+  // Double tap detection
+  const now = Date.now();
+  if (now - lastTap < 300) activateSlowMo();
+  lastTap = now;
+}, { passive: false });
+
+gc.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!touching) return;
+  const t = e.touches[0];
+  player.targetX = t.clientX;
+  player.targetY = t.clientY;
+}, { passive: false });
+
+gc.addEventListener('touchend', () => { touching = false; });
+
+// Mouse fallback
+gc.addEventListener('mousedown', (e) => {
+  touching = true;
+  player.targetX = e.clientX;
+  player.targetY = e.clientY;
+  const now = Date.now();
+  if (now - lastTap < 300) activateSlowMo();
+  lastTap = now;
+});
+gc.addEventListener('mousemove', (e) => {
+  if (!touching) return;
+  player.targetX = e.clientX;
+  player.targetY = e.clientY;
+});
+gc.addEventListener('mouseup', () => { touching = false; });
+
+// ─── SLOW MOTION ───
+function activateSlowMo() {
+  if (slowMoEnergy < 30 || slowMoCooldown > 0) return;
+  slowMo = true;
+  setTimeout(() => { slowMo = false; }, SLOW_MO_DURATION);
+}
+
+// ─── FLASH ───
+function flash(type) {
+  const el = document.getElementById('flashOverlay');
+  el.className = '';
+  void el.offsetWidth;
+  el.classList.add(type);
+}
+
+// ─── VIBRATE ───
+function vibrate(ms) {
+  if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+// ─── UPDATE LIVES DISPLAY ───
+function updateLivesUI() {
+  const el = document.getElementById('livesDisplay');
+  el.innerHTML = '';
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'life-pip' + (i >= lives ? ' lost' : '');
+    el.appendChild(pip);
   }
 }
 
-// --- SPAWNING ---
-function spawnEntity() {
-  const angle = Math.random() * Math.PI * 2;
-  const depth = 450 + Math.random() * 50;
+// ─── COLLISION ───
+function dist(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
 
-  // Weighted spawn: mostly correct-color sparks, some wrong, occasional dark matter
-  const roll = Math.random();
-  if (roll < 0.45) {
-    // Correct color spark
-    entities.push({ type: 'spark', colorIdx: playerColorIdx, angle, depth, collected: false });
-  } else if (roll < 0.80) {
-    // Wrong color spark
-    let ci = playerColorIdx;
-    while (ci === playerColorIdx) ci = Math.floor(Math.random() * NEON_COLORS.length);
-    entities.push({ type: 'spark', colorIdx: ci, angle, depth, collected: false });
+// ─── START GAME ───
+function startGame() {
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('slowMoBar').classList.remove('hidden');
+  document.getElementById('slowMoLabel').classList.remove('hidden');
+  gc.classList.remove('hidden');
+
+  resizeGame();
+  window.addEventListener('resize', resizeGame);
+
+  entities = [];
+  particles = [];
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  lives = MAX_LIVES;
+  difficulty = 0;
+  spawnTimer = 0;
+  slowMo = false;
+  slowMoEnergy = 100;
+  slowMoCooldown = 0;
+  totalCollected = 0;
+  totalDodged = 0;
+  gameRunning = true;
+  lastTime = performance.now();
+
+  initPlayer();
+  updateLivesUI();
+  requestAnimationFrame(gameLoop);
+}
+
+// ─── GAME LOOP ───
+function gameLoop(now) {
+  if (!gameRunning) return;
+
+  const rawDt = (now - lastTime) / 1000;
+  lastTime = now;
+  const dt = Math.min(rawDt, 0.05);
+  const timeScale = slowMo ? 0.3 : 1;
+  elapsed = dt * timeScale;
+
+  update(elapsed, dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function update(dt, realDt) {
+  // Difficulty ramp
+  difficulty = Math.min(score / 500, 8);
+
+  // Slow-mo energy
+  if (slowMo) {
+    slowMoEnergy = Math.max(0, slowMoEnergy - realDt * 35);
+    if (slowMoEnergy <= 0) slowMo = false;
   } else {
-    // Dark matter
-    entities.push({ type: 'dark', angle, depth, collected: false });
+    slowMoEnergy = Math.min(100, slowMoEnergy + realDt * 8);
   }
-}
+  if (slowMoCooldown > 0) slowMoCooldown -= realDt;
+  document.getElementById('slowMoFill').style.width = slowMoEnergy + '%';
 
-function spawnPrismGate() {
-  entities.push({ type: 'prism', angle: 0, depth: 500, newColorIdx: -1 });
-}
+  // Player movement (smooth follow)
+  const ease = 0.15;
+  player.x += (player.targetX - player.x) * ease;
+  player.y += (player.targetY - player.y) * ease;
+  player.x = Math.max(player.size, Math.min(W - player.size, player.x));
+  player.y = Math.max(player.size, Math.min(H - player.size, player.y));
+  player.glowPhase += dt * 4;
 
-// --- COLLISION ---
-function checkCollisions() {
-  const tubeR = Math.min(W, H) * TUBE_RADIUS;
-  const pR = 0.82;
-  const collectDist = 0.08; // angle + depth threshold
+  // Spawning
+  const spawnRate = Math.max(0.15, 0.6 - difficulty * 0.05);
+  spawnTimer += dt;
+  if (spawnTimer >= spawnRate) {
+    spawnTimer = 0;
+    spawnGlyph();
+    if (Math.random() < 0.04) spawnPowerUp();
+  }
 
+  // Update entities
   for (let i = entities.length - 1; i >= 0; i--) {
     const e = entities[i];
-    if (e.collected || e.depth > 50) continue;
+    e.wobble += e.wobbleSpeed * dt;
+    e.y += e.speed * 60 * dt;
+    e.x += Math.sin(e.wobble) * e.wobbleAmp * dt;
 
-    if (e.type === 'prism') {
-      if (e.depth < 10 && e.depth > -10 && !e.collected) {
-        e.collected = true;
-        // Change color
-        let newIdx = playerColorIdx;
-        while (newIdx === playerColorIdx) newIdx = Math.floor(Math.random() * NEON_COLORS.length);
-        playerColorIdx = newIdx;
-        sfxPrism();
-        screenFlash.alpha = 0.4;
-        screenFlash.color = NEON_COLORS[newIdx].hex;
+    if (e.type === 'power') e.pulsePhase = (e.pulsePhase || 0) + dt * 5;
 
-      }
+    // Trail
+    e.trail.push({ x: e.x, y: e.y, alpha: 0.5 });
+    if (e.trail.length > 6) e.trail.shift();
+    e.trail.forEach(t => t.alpha *= 0.9);
+
+    // Off screen
+    if (e.y > H + 50) {
+      if (e.type === 'bad') totalDodged++;
+      entities.splice(i, 1);
       continue;
     }
 
-    // Check proximity
-    const ad = Math.abs(angleDiff(playerAngle, e.angle));
-    const dd = Math.abs(e.depth);
-    if (ad < 0.4 && dd < 25) {
-      if (e.type === 'spark') {
-        e.collected = true;
-        if (e.colorIdx === playerColorIdx) {
-          // Correct — grow!
-          score += Math.floor(10 * speed);
-          playerSize = Math.min(3, playerSize + 0.08);
-          playerSquish = { x: 1.4, y: 0.7 };
-          sfxCollect();
-          screenFlash.alpha = 0.15;
-          screenFlash.color = NEON_COLORS[e.colorIdx].hex;
-          const pos = getEntityScreenPos(e.angle, e.depth);
-          spawnCollectParticles(pos.x, pos.y, NEON_COLORS[e.colorIdx], 20);
-          shockwaves.push({ x: pos.x, y: pos.y, r: 5, maxR: 80 * dpr, life: 1, h: NEON_COLORS[e.colorIdx].h, s: NEON_COLORS[e.colorIdx].s, l: NEON_COLORS[e.colorIdx].l });
-        } else {
-          // Wrong color — shrink!
-          playerSize = Math.max(0.3, playerSize - 0.15);
-          playerSquish = { x: 0.8, y: 1.2 };
-          sfxWrong();
-          screenFlash.alpha = 0.2;
-          screenFlash.color = '#ff0040';
-          cameraShake.t = 0.15;
-        }
-      } else if (e.type === 'dark') {
-        if (invincibleTimer > 0) continue;
-        e.collected = true;
+    // Collision with player
+    const d = dist(e, player);
+    const hitDist = player.size + e.size * 0.6;
+    if (d < hitDist) {
+      if (e.type === 'good') {
+        score += 10 * (1 + combo * 0.5);
+        combo++;
+        maxCombo = Math.max(maxCombo, combo);
+        totalCollected++;
+        emitParticles(e.x, e.y, '#00ff41', 8);
+        flash('collect');
+      } else if (e.type === 'power') {
+        slowMoEnergy = 100;
+        score += 50;
+        emitParticles(e.x, e.y, '#00ffff', 15);
+        flash('collect');
+      } else {
         lives--;
-        updateLivesDisplay();
+        combo = 0;
+        updateLivesUI();
+        emitParticles(e.x, e.y, '#ff3333', 20);
+        flash('hit');
+        vibrate(100);
         if (lives <= 0) {
-          die();
-        } else {
-          // Lose a life, become invincible briefly
-          invincibleTimer = INVINCIBLE_DURATION;
-          sfxWrong();
-          screenFlash.alpha = 0.3;
-          screenFlash.color = '#ff0040';
-          cameraShake.t = 0.25;
-          playerSize = Math.max(0.5, playerSize - 0.2);
-          const pos = getEntityScreenPos(e.angle, e.depth);
-          spawnCollectParticles(pos.x, pos.y, { h: 340, s: 100, l: 60 }, 12);
+          gameOver();
+          return;
         }
       }
-    }
-  }
-}
-
-function die() {
-  if (!gameActive) return;
-  gameActive = false;
-  deathAnim = 1;
-  sfxDeath();
-  spawnDeathParticles();
-  screenFlash.alpha = 0.6;
-  screenFlash.color = '#ff0040';
-  cameraShake.t = 0.4;
-
-  if (score > bestScore) {
-    bestScore = score;
-    try { localStorage.setItem('lumina_best', bestScore); } catch(e) {}
-  }
-
-  setTimeout(() => {
-    const ov = document.getElementById('overlay');
-    document.getElementById('final-score-row').style.display = '';
-    document.getElementById('final-score-val').textContent = score;
-    document.getElementById('best-row').textContent = `BEST: ${bestScore}`;
-    document.getElementById('overlay-title').textContent = 'SHATTARD';
-    document.getElementById('overlay-title').style.background = 'linear-gradient(90deg,#ff0044,#ff3366)';
-    document.getElementById('overlay-title').style.webkitBackgroundClip = 'text';
-    document.getElementById('overlay-title').style.backgroundClip = 'text';
-    document.getElementById('play-btn').textContent = 'RETRY';
-    document.getElementById('how-to-play').style.display = 'none';
-    ov.classList.remove('hidden');
-  }, 1200);
-}
-
-// --- UPDATE ---
-function update(dt) {
-  if (!gameActive) {
-    // Still update particles
-    updateParticles(dt);
-    deathAnim = Math.max(0, deathAnim - dt);
-    return;
-  }
-
-  gameTime += dt;
-  speed = 1 + gameTime * SPEED_INCREASE;
-
-  // Move player — keyboard (binary) takes priority, then analog mouse/touch
-  const turnSpeed = 5.0; // radians per second at full input
-  let steer = 0;
-  if (keysDown.left) steer -= 1;
-  if (keysDown.right) steer += 1;
-  if (steer !== 0) {
-    playerAngle += steer * turnSpeed * dt;
-  } else if (dragging || mouseDown) {
-    playerAngle += steerInput * turnSpeed * dt;
-  }
-
-  // Squish recovery
-  playerSquish.x = lerp(playerSquish.x, 1, dt * 8);
-  playerSquish.y = lerp(playerSquish.y, 1, dt * 8);
-
-  // Size decay
-  playerSize = Math.max(0.5, playerSize - dt * 0.02);
-
-  // Invincibility timer
-  if (invincibleTimer > 0) invincibleTimer -= dt;
-
-  // Move entities toward camera
-  const moveSpeed = 200 * speed;
-  for (let i = entities.length - 1; i >= 0; i--) {
-    entities[i].depth -= moveSpeed * dt;
-    if (entities[i].depth < -50 || entities[i].collected) {
       entities.splice(i, 1);
     }
   }
 
-  // Spawn
-  const spawnInterval = SPAWN_INTERVAL_BASE / (0.5 + speed * 0.5);
-  spawnTimer += dt;
-  if (spawnTimer >= spawnInterval) {
-    spawnTimer = 0;
-    spawnEntity();
-    // Sometimes spawn clusters
-    if (Math.random() < 0.3) spawnEntity();
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * 60 * dt;
+    p.y += p.vy * 60 * dt;
+    p.vy += 2 * dt;
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i, 1); }
   }
 
-  // Prism gates
-  prismTimer += dt;
-  const prismInterval = 8 / Math.sqrt(speed);
-  if (prismTimer >= prismInterval) {
-    prismTimer = 0;
-    spawnPrismGate();
-  }
-
-  // Tube scroll
-  tubeZ += moveSpeed * dt;
-
-  // Collisions
-  checkCollisions();
-
-  // Particles
-  updateParticles(dt);
-
-  // Shockwaves
-  for (const s of shockwaves) {
-    s.r += (s.maxR - s.r) * dt * 6;
-    s.life -= dt * 3;
-  }
-  shockwaves = shockwaves.filter(s => s.life > 0);
-
-  // Camera shake
-  if (cameraShake.t > 0) {
-    cameraShake.t -= dt;
-    const intensity = cameraShake.t * 15;
-    cameraShake.x = (Math.random() - 0.5) * intensity * dpr;
-    cameraShake.y = (Math.random() - 0.5) * intensity * dpr;
-  } else {
-    cameraShake.x = 0; cameraShake.y = 0;
-  }
-
-  // Screen flash
-  if (screenFlash.alpha > 0) screenFlash.alpha -= dt * 3;
-
-  // HUD
-  document.getElementById('score-val').textContent = score;
-  document.getElementById('speed-label').textContent = `SPEED ×${speed.toFixed(1)}`;
-  const sizeBar = document.getElementById('size-bar');
-  const sizePct = Math.min(100, ((playerSize - 0.3) / 2.7) * 100);
-  sizeBar.style.width = sizePct + '%';
-  sizeBar.style.background = getPlayerColor().hex;
+  // Update HUD
+  document.getElementById('scoreDisplay').textContent = Math.floor(score);
+  document.getElementById('comboDisplay').textContent = combo > 1 ? `x${combo} COMBO` : '';
 }
 
-function updateParticles(dt) {
-  for (const p of particles) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vx *= 0.97; p.vy *= 0.97;
-    p.life -= p.decay * dt;
-  }
-  particles = particles.filter(p => p.life > 0);
-}
-
-function updateLivesDisplay() {
-  document.getElementById('lives-display').textContent = '\u2665'.repeat(lives);
-}
-
-
-// --- RENDER ---
+// ─── RENDER ───
 function render() {
-  X.fillStyle = '#000';
-  X.fillRect(0, 0, W, H);
-
-  // Ambient glow behind tube
-  const pc = getPlayerColor();
-  const ambGrad = X.createRadialGradient(cx, cy, 0, cx, cy, W * 0.5);
-  ambGrad.addColorStop(0, hsl(pc.h, 40, 15, 0.15));
-  ambGrad.addColorStop(1, 'transparent');
-  X.fillStyle = ambGrad;
-  X.fillRect(0, 0, W, H);
-
-  drawTube();
-  drawEntities();
-  drawPlayer();
-  drawParticles();
-  drawShockwaves();
-
-  // Screen flash
-  if (screenFlash.alpha > 0) {
-    X.fillStyle = screenFlash.color;
-    X.globalAlpha = screenFlash.alpha * 0.3;
-    X.fillRect(0, 0, W, H);
-    X.globalAlpha = 1;
-  }
+  ctx.clearRect(0, 0, W, H);
 
   // Vignette
-  const vigGrad = X.createRadialGradient(cx, cy, H * 0.3, cx, cy, H * 0.7);
-  vigGrad.addColorStop(0, 'transparent');
-  vigGrad.addColorStop(1, 'rgba(0,0,0,0.5)');
-  X.fillStyle = vigGrad;
-  X.fillRect(0, 0, W, H);
-}
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.8);
+  vg.addColorStop(0, 'transparent');
+  vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
 
-// --- MAIN LOOP ---
-let lastTime = 0;
-function loop(now) {
-  const dt = Math.min(50, now - (lastTime || now)) / 1000;
-  lastTime = now;
-  update(dt);
-  render();
-  requestAnimationFrame(loop);
-}
-
-// --- INPUT ---
-// Steering: pointer X position relative to screen center controls turn speed
-// Left of center = rotate counter-clockwise, right = clockwise
-// Further from center = faster turning
-let steerInput = 0; // -1 to 1
-let mouseDown = false;
-let mouseStartX = 0;
-let touchStartX = 0;
-
-const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-// Set device-specific instructions
-(function setInstructions() {
-  const controlsEl = document.getElementById('how-to-controls');
-  const hintsEl = document.getElementById('instructions');
-  if (isTouchDevice) {
-    controlsEl.innerHTML = 'Touch and drag to steer';
-    hintsEl.textContent = 'touch and drag to steer \u00b7 match your color \u00b7 avoid the rest';
-  } else {
-    controlsEl.innerHTML = 'Click and drag to steer<br>\u2190 / A / D / \u2192 \u2014 keyboard steer';
-    hintsEl.textContent = 'click and drag, or arrow keys to steer \u00b7 match your color \u00b7 avoid the rest';
+  // Slow-mo tint
+  if (slowMo) {
+    ctx.fillStyle = 'rgba(0, 255, 65, 0.03)';
+    ctx.fillRect(0, 0, W, H);
   }
-})();
 
-// Mouse: hold button + drag from click origin for analog steering
-function onMouseDown(e) {
-  if (!gameActive) return;
-  initAudio();
-  e.preventDefault();
-  mouseDown = true;
-  mouseStartX = e.clientX;
-  steerInput = 0;
-  document.getElementById('instructions').classList.add('hidden');
-}
+  // Entities
+  for (const e of entities) {
+    // Trail
+    for (const t of e.trail) {
+      ctx.globalAlpha = t.alpha * 0.15;
+      ctx.fillStyle = e.type === 'bad' ? '#ff3333' : e.type === 'power' ? '#00ffff' : '#00ff41';
+      ctx.font = `${e.size}px Share Tech Mono`;
+      ctx.textAlign = 'center';
+      ctx.fillText(e.char, t.x, t.y);
+    }
 
-function onMouseMove(e) {
-  if (!mouseDown || !gameActive) return;
-  const sensitivity = window.innerWidth * 0.2;
-  const deltaX = e.clientX - mouseStartX;
-  steerInput = Math.max(-1, Math.min(1, deltaX / sensitivity));
-}
-
-function onMouseUp(e) {
-  mouseDown = false;
-}
-
-// Touch: relative drag from initial touch point
-function onTouchStart(e) {
-  if (!gameActive) return;
-  initAudio();
-  dragging = true;
-  touchStartX = e.touches[0].clientX;
-  steerInput = 0;
-  document.getElementById('instructions').classList.add('hidden');
-}
-
-function onTouchMove(e) {
-  if (!dragging || !gameActive) return;
-  const sensitivity = window.innerWidth * 0.2;
-  const deltaX = e.touches[0].clientX - touchStartX;
-  steerInput = Math.max(-1, Math.min(1, deltaX / sensitivity));
-}
-
-function onTouchEnd() { dragging = false; steerInput = 0; }
-
-C.addEventListener('mousedown', onMouseDown);
-window.addEventListener('mousemove', onMouseMove);
-window.addEventListener('mouseup', onMouseUp);
-C.addEventListener('contextmenu', e => e.preventDefault());
-C.addEventListener('touchstart', onTouchStart);
-C.addEventListener('touchmove', onTouchMove);
-C.addEventListener('touchend', onTouchEnd);
-
-let keysDown = {};
-window.addEventListener('keydown', e => {
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { keysDown.left = true; e.preventDefault(); }
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { keysDown.right = true; e.preventDefault(); }
-});
-window.addEventListener('keyup', e => {
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keysDown.left = false;
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keysDown.right = false;
-});
-
-// --- GAME FLOW ---
-function startGame() {
-  score = 0;
-  speed = 1;
-  playerAngle = -Math.PI / 2; // top
-  playerSize = 1;
-  playerColorIdx = 0;
-  playerTrail = [];
-  playerSquish = { x: 1, y: 1 };
-  entities = [];
-  particles = [];
-  shockwaves = [];
-  spawnTimer = 0;
-  prismTimer = 0;
-  gameTime = 0;
-  deathAnim = 0;
-  screenFlash = { alpha: 0, color: '#fff' };
-  cameraShake = { x: 0, y: 0, t: 0 };
-  lives = 3;
-  invincibleTimer = 0;
-  gameActive = true;
-  dragging = false;
-  updateLivesDisplay();
-    document.getElementById('overlay').classList.add('hidden');
-  if (!instructionsShown) {
-    document.getElementById('instructions').classList.remove('hidden');
-    instructionsShown = true;
+    ctx.globalAlpha = e.alpha;
+    if (e.type === 'bad') {
+      ctx.fillStyle = '#ff3333';
+      ctx.shadowColor = '#ff3333';
+      ctx.shadowBlur = 8;
+    } else if (e.type === 'power') {
+      const pulse = 0.7 + Math.sin(e.pulsePhase) * 0.3;
+      ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 15;
+    } else {
+      ctx.fillStyle = '#00ff41';
+      ctx.shadowColor = '#00ff41';
+      ctx.shadowBlur = 6;
+    }
+    ctx.font = `bold ${e.size}px Share Tech Mono`;
+    ctx.textAlign = 'center';
+    ctx.fillText(e.char, e.x, e.y);
+    ctx.shadowBlur = 0;
   }
+
+  // Particles
+  for (const p of particles) {
+    const a = p.life / p.maxLife;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = p.color;
+    if (p.char) {
+      ctx.font = `${p.size * 4}px Share Tech Mono`;
+      ctx.textAlign = 'center';
+      ctx.fillText(p.char, p.x, p.y);
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Player
+  ctx.globalAlpha = 1;
+  const glow = 8 + Math.sin(player.glowPhase) * 4;
+  
+  // Player outer ring
+  ctx.strokeStyle = '#00ff41';
+  ctx.shadowColor = '#00ff41';
+  ctx.shadowBlur = glow;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Player inner hexagon
+  ctx.fillStyle = '#00ff4130';
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 6 + player.glowPhase * 0.3;
+    const r = player.size * 0.7;
+    const px = player.x + Math.cos(angle) * r;
+    const py = player.y + Math.sin(angle) * r;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#00ff4180';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle = '#00ff41';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.globalAlpha = 1;
 }
 
-document.getElementById('play-btn').addEventListener('click', () => { initAudio(); startGame(); });
+// ─── GAME OVER ───
+function gameOver() {
+  gameRunning = false;
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('slowMoBar').classList.add('hidden');
+  document.getElementById('slowMoLabel').classList.add('hidden');
+  gc.classList.add('hidden');
 
-// --- RESIZE ---
-function resize() {
-  dpr = window.devicePixelRatio || 1;
-  W = window.innerWidth * dpr;
-  H = window.innerHeight * dpr;
-  C.width = W; C.height = H;
-  C.style.width = window.innerWidth + 'px';
-  C.style.height = window.innerHeight + 'px';
-  cx = W / 2; cy = H / 2;
+  document.getElementById('finalScore').textContent = Math.floor(score);
+  document.getElementById('finalStats').innerHTML =
+    `GLYPHS COLLECTED: ${totalCollected}<br>` +
+    `THREATS DODGED: ${totalDodged}<br>` +
+    `MAX COMBO: x${maxCombo}`;
+
+  setTimeout(() => {
+    document.getElementById('gameOver').classList.remove('hidden');
+  }, 300);
 }
-window.addEventListener('resize', resize);
-resize();
-
-// Load best
-try { bestScore = parseInt(localStorage.getItem('lumina_best') || '0'); } catch(e) {}
-document.getElementById('best-row').textContent = bestScore > 0 ? `BEST: ${bestScore}` : '';
-
-updateLivesDisplay();
-requestAnimationFrame(loop);
 </script>
 </body>
 </html>
