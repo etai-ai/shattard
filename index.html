@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lumina Loop</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Exo+2:wght@300;400;600&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100vw;height:100dvh}
+
+#hud{position:absolute;top:0;left:0;right:0;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10}
+#score-display{text-align:left}
+#score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:32px;color:#fff;text-shadow:0 0 20px rgba(255,255,255,0.5);letter-spacing:2px}
+#speed-label{font-family:'Exo 2',sans-serif;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase}
+#color-indicator{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);box-shadow:0 0 15px currentColor;transition:all 0.3s}
+#size-bar-wrap{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:120px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;z-index:10;pointer-events:none}
+#size-bar{height:100%;border-radius:2px;transition:width 0.3s;width:10%}
+
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;background:rgba(0,0,0,0.85);transition:opacity 0.5s}
+#overlay.hidden{opacity:0;pointer-events:none}
+#overlay-title{font-family:'Orbitron',sans-serif;font-weight:900;font-size:28px;letter-spacing:6px;margin-bottom:4px}
+#overlay-sub{font-family:'Exo 2',sans-serif;font-size:13px;color:rgba(255,255,255,0.3);letter-spacing:4px;margin-bottom:30px;text-transform:uppercase}
+#final-score-row{margin-bottom:24px;text-align:center}
+#final-score-label{font-family:'Exo 2',sans-serif;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:3px}
+#final-score-val{font-family:'Orbitron',sans-serif;font-weight:800;font-size:48px;color:#fff;text-shadow:0 0 30px rgba(255,255,255,0.4)}
+#best-row{font-family:'Exo 2',sans-serif;font-size:12px;color:rgba(255,255,255,0.25);letter-spacing:2px;margin-bottom:32px}
+.play-btn{font-family:'Orbitron',sans-serif;font-weight:600;font-size:14px;letter-spacing:4px;padding:14px 40px;border:1px solid rgba(255,255,255,0.15);border-radius:30px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);cursor:pointer;transition:all 0.3s;text-transform:uppercase}
+.play-btn:active{transform:scale(0.95);background:rgba(255,255,255,0.1)}
+
+#instructions{font-family:'Exo 2',sans-serif;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;position:absolute;bottom:40px;text-align:center;width:100%;pointer-events:none;z-index:10;transition:opacity 1s}
+#instructions.hidden{opacity:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div id="score-display">
+    <div id="score-val">0</div>
+    <div id="speed-label">SPEED ×1.0</div>
+  </div>
+  <div id="color-indicator"></div>
+</div>
+
+<div id="size-bar-wrap"><div id="size-bar"></div></div>
+
+<div id="overlay">
+  <div id="overlay-title" style="background:linear-gradient(90deg,#ff3366,#33ccff,#66ff99);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">LUMINA LOOP</div>
+  <div id="overlay-sub">survival dash</div>
+  <div id="final-score-row" style="display:none">
+    <div id="final-score-label">DISTANCE</div>
+    <div id="final-score-val">0</div>
+  </div>
+  <div id="best-row"></div>
+  <button class="play-btn" id="play-btn">PLAY</button>
+</div>
+
+<div id="instructions">hold left or right to steer · match your color · avoid the rest</div>
+
+<script>
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+// --- CONFIG ---
+const TUBE_RADIUS = 0.42; // fraction of screen width
+const PLAYER_BASE_SIZE = 0.04;
+const SPARK_SIZE = 0.015;
+const DARK_MATTER_SIZE = 0.035;
+const PRISM_GATE_DEPTH = 120;
+const SPAWN_INTERVAL_BASE = 0.4; // seconds between spawns
+const SPEED_INCREASE = 0.008; // per second
+
+// Colors — neon on black
+const NEON_COLORS = [
+  { h: 340, s: 100, l: 60, hex: '#ff3366', name: 'pink' },
+  { h: 180, s: 100, l: 50, hex: '#00e5ff', name: 'cyan' },
+  { h: 130, s: 100, l: 55, hex: '#39ff14', name: 'green' },
+  { h: 45,  s: 100, l: 55, hex: '#ffcc00', name: 'gold' },
+  { h: 270, s: 100, l: 65, hex: '#b84dff', name: 'violet' },
+];
+
+// --- STATE ---
+let W, H, cx, cy, dpr;
+let gameActive = false;
+let score = 0;
+let bestScore = 0;
+let speed = 1;
+let playerAngle = 0; // radians, position on tube ring
+let playerSize = 1; // multiplier
+let playerColorIdx = 0;
+let playerTrail = [];
+let playerSquish = { x: 1, y: 1 }; // stretch/squash
+let entities = []; // sparks, dark matter, prism gates
+let particles = [];
+let tubeSegments = [];
+let tubeZ = 0;
+let spawnTimer = 0;
+let prismTimer = 0;
+let gameTime = 0;
+let instructionsShown = false;
+let screenFlash = { alpha: 0, color: '#fff' };
+let cameraShake = { x: 0, y: 0, t: 0 };
+let deathAnim = 0;
+let dragging = false;
+
+// --- AUDIO ---
+let audioCtx = null;
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playTone(freq, dur, vol, type) {
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol || 0.05, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+function sfxCollect() { playTone(880 + Math.random()*200, 0.15, 0.06, 'sine'); playTone(1320, 0.1, 0.03, 'triangle'); }
+function sfxWrong() { playTone(150, 0.3, 0.08, 'sawtooth'); playTone(120, 0.2, 0.06, 'square'); }
+function sfxPrism() { playTone(660, 0.3, 0.05, 'sine'); playTone(990, 0.2, 0.04, 'triangle'); setTimeout(()=>playTone(1320,0.2,0.03,'sine'),100); }
+function sfxDeath() { playTone(80, 0.8, 0.1, 'sawtooth'); playTone(60, 1, 0.08, 'square'); }
+
+// --- HELPERS ---
+function hsl(h, s, l, a) { return a !== undefined ? `hsla(${h},${s}%,${l}%,${a})` : `hsl(${h},${s}%,${l}%)`; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function angleDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI*2; while (d < -Math.PI) d += Math.PI*2; return d; }
+
+function getPlayerColor() { return NEON_COLORS[playerColorIdx]; }
+
+// --- TUBE RENDERING ---
+function drawTube() {
+  const pc = getPlayerColor();
+  const tubeR = Math.min(W, H) * TUBE_RADIUS;
+  const segments = 40;
+  const depthFade = 0.97;
+
+  // Draw rings from back to front
+  for (let i = segments; i >= 0; i--) {
+    const t = i / segments;
+    const z = t; // 0 = front, 1 = back
+    const scale = 1 / (1 + z * 3);
+    const r = tubeR * scale;
+    const alpha = (1 - z) * 0.25;
+    const pulsePhase = gameTime * 3 + i * 0.3;
+    const pulse = 1 + Math.sin(pulsePhase) * 0.03 * speed;
+
+    const ox = cx + cameraShake.x;
+    const oy = cy + cameraShake.y;
+
+    // Tube ring
+    X.beginPath();
+    X.arc(ox, oy, r * pulse, 0, Math.PI * 2);
+    X.strokeStyle = hsl(pc.h, 60, 40, alpha * 0.5);
+    X.lineWidth = (1 + (1-z) * 2) * dpr;
+    X.stroke();
+
+    // Grid lines (vertical stripes on tube)
+    if (i % 4 === 0) {
+      const gridAlpha = alpha * 0.3;
+      for (let a = 0; a < 12; a++) {
+        const angle = (a / 12) * Math.PI * 2 + tubeZ * 0.01;
+        const x1 = ox + Math.cos(angle) * r * pulse;
+        const y1 = oy + Math.sin(angle) * r * pulse;
+        X.beginPath();
+        X.arc(x1, y1, 1.5 * dpr, 0, Math.PI * 2);
+        X.fillStyle = hsl(pc.h, 50, 50, gridAlpha);
+        X.fill();
+      }
+    }
+  }
+
+  // Glow at center (vanishing point)
+  const grad = X.createRadialGradient(cx, cy, 0, cx, cy, tubeR * 0.15);
+  grad.addColorStop(0, hsl(pc.h, 80, 60, 0.15));
+  grad.addColorStop(1, 'transparent');
+  X.fillStyle = grad;
+  X.fillRect(0, 0, W, H);
+}
+
+// --- ENTITY RENDERING ---
+function getEntityScreenPos(angle, depth) {
+  const tubeR = Math.min(W, H) * TUBE_RADIUS;
+  const z = depth / 500;
+  const scale = 1 / (1 + z * 3);
+  const r = tubeR * scale;
+  const x = cx + Math.cos(angle) * r + cameraShake.x;
+  const y = cy + Math.sin(angle) * r + cameraShake.y;
+  return { x, y, scale };
+}
+
+function drawEntities() {
+  // Sort by depth (far first)
+  const sorted = [...entities].sort((a, b) => b.depth - a.depth);
+
+  for (const e of sorted) {
+    if (e.depth < -20 || e.depth > 500) continue;
+    const pos = getEntityScreenPos(e.angle, e.depth);
+    const baseSize = e.type === 'spark' ? SPARK_SIZE : (e.type === 'dark' ? DARK_MATTER_SIZE : 0.05);
+    const sz = W * baseSize * pos.scale;
+    if (sz < 1) continue;
+
+    if (e.type === 'spark') {
+      const c = NEON_COLORS[e.colorIdx];
+      // Glow
+      X.save();
+      X.shadowColor = c.hex;
+      X.shadowBlur = sz * 2;
+      X.beginPath();
+      X.arc(pos.x, pos.y, sz, 0, Math.PI * 2);
+      X.fillStyle = hsl(c.h, c.s, c.l, 0.9);
+      X.fill();
+      X.restore();
+      // Core
+      X.beginPath();
+      X.arc(pos.x, pos.y, sz * 0.5, 0, Math.PI * 2);
+      X.fillStyle = hsl(c.h, 60, 85, 0.8);
+      X.fill();
+
+    } else if (e.type === 'dark') {
+      // Dark matter — menacing void
+      const pulseR = sz * (1 + Math.sin(gameTime * 8 + e.angle) * 0.15);
+      X.save();
+      X.shadowColor = '#660033';
+      X.shadowBlur = sz * 1.5;
+      // Outer crackling
+      X.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + gameTime * 2;
+        const wobble = 1 + Math.sin(gameTime * 12 + i * 2.5) * 0.25;
+        const px = pos.x + Math.cos(a) * pulseR * wobble;
+        const py = pos.y + Math.sin(a) * pulseR * wobble;
+        if (i === 0) X.moveTo(px, py); else X.lineTo(px, py);
+      }
+      X.closePath();
+      X.fillStyle = 'rgba(40,0,20,0.8)';
+      X.fill();
+      X.strokeStyle = 'rgba(200,0,80,0.5)';
+      X.lineWidth = 1.5 * dpr;
+      X.stroke();
+      X.restore();
+      // Inner void
+      X.beginPath();
+      X.arc(pos.x, pos.y, sz * 0.4, 0, Math.PI * 2);
+      X.fillStyle = '#000';
+      X.fill();
+
+    } else if (e.type === 'prism') {
+      // Prism gate — rainbow ring
+      const ringR = W * TUBE_RADIUS * pos.scale * 0.9;
+      X.save();
+      X.globalAlpha = Math.max(0, 1 - Math.abs(e.depth) / 200) * 0.7;
+      X.beginPath();
+      X.arc(cx + cameraShake.x, cy + cameraShake.y, ringR, 0, Math.PI * 2);
+      const prismGrad = X.createConicGradient(gameTime * 2, cx, cy);
+      for (let i = 0; i <= 5; i++) {
+        prismGrad.addColorStop(i / 5, NEON_COLORS[i % 5].hex);
+      }
+      X.strokeStyle = prismGrad;
+      X.lineWidth = (6 + Math.sin(gameTime * 5) * 2) * dpr * pos.scale;
+      X.stroke();
+      X.restore();
+    }
+  }
+}
+
+// --- PLAYER ---
+function drawPlayer() {
+  if (deathAnim > 0) return; // handled in death particles
+  const pc = getPlayerColor();
+  const tubeR = Math.min(W, H) * TUBE_RADIUS;
+  const pR = tubeR * 0.82;
+  const px = cx + Math.cos(playerAngle) * pR + cameraShake.x;
+  const py = cy + Math.sin(playerAngle) * pR + cameraShake.y;
+  const sz = W * PLAYER_BASE_SIZE * (0.8 + playerSize * 0.2);
+
+  // Trail
+  playerTrail.unshift({ x: px, y: py, life: 1 });
+  if (playerTrail.length > 25) playerTrail.pop();
+  for (let i = playerTrail.length - 1; i >= 1; i--) {
+    const t = playerTrail[i];
+    const alpha = t.life * 0.4;
+    const r = sz * t.life * 0.6;
+    X.beginPath();
+    X.arc(t.x, t.y, r, 0, Math.PI * 2);
+    X.fillStyle = hsl(pc.h, pc.s, pc.l, alpha);
+    X.fill();
+    t.life -= 0.04;
+  }
+  playerTrail = playerTrail.filter(t => t.life > 0);
+
+  // Main body — fluid blob
+  X.save();
+  X.translate(px, py);
+  X.scale(playerSquish.x, playerSquish.y);
+
+  // Outer glow
+  X.shadowColor = pc.hex;
+  X.shadowBlur = sz * 3;
+  X.beginPath();
+  // Wobbly circle
+  const wobblePoints = 12;
+  for (let i = 0; i <= wobblePoints; i++) {
+    const a = (i / wobblePoints) * Math.PI * 2;
+    const wobble = 1 + Math.sin(gameTime * 6 + a * 3) * 0.08 + Math.sin(gameTime * 10 + a * 5) * 0.04;
+    const r = sz * wobble;
+    const ex = Math.cos(a) * r, ey = Math.sin(a) * r;
+    if (i === 0) X.moveTo(ex, ey); else X.lineTo(ex, ey);
+  }
+  X.closePath();
+  X.fillStyle = hsl(pc.h, pc.s, pc.l, 0.7);
+  X.fill();
+  X.shadowBlur = 0;
+
+  // Inner bright core
+  const coreGrad = X.createRadialGradient(-sz*0.15, -sz*0.15, 0, 0, 0, sz * 0.7);
+  coreGrad.addColorStop(0, hsl(pc.h, 60, 90, 0.8));
+  coreGrad.addColorStop(0.5, hsl(pc.h, pc.s, pc.l + 10, 0.5));
+  coreGrad.addColorStop(1, 'transparent');
+  X.beginPath();
+  X.arc(0, 0, sz * 0.7, 0, Math.PI * 2);
+  X.fillStyle = coreGrad;
+  X.fill();
+
+  X.restore();
+}
+
+// --- PARTICLES ---
+function drawParticles() {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    const alpha = p.life * (p.maxAlpha || 0.8);
+    const sz = p.size * (p.shrink ? p.life : 1);
+    X.beginPath();
+    X.arc(p.x, p.y, sz, 0, Math.PI * 2);
+    X.fillStyle = hsl(p.h, p.s, p.l, alpha);
+    X.fill();
+  }
+}
+
+function spawnCollectParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 50 + Math.random() * 150;
+    particles.push({
+      x, y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      size: (2 + Math.random() * 4) * dpr,
+      life: 1, decay: 1.5 + Math.random(),
+      h: color.h + (Math.random()-0.5)*20, s: color.s, l: color.l + Math.random()*20,
+      shrink: true, maxAlpha: 0.9,
+    });
+  }
+}
+
+function spawnDeathParticles() {
+  const pc = getPlayerColor();
+  const tubeR = Math.min(W, H) * TUBE_RADIUS;
+  const pR = tubeR * 0.82;
+  const px = cx + Math.cos(playerAngle) * pR;
+  const py = cy + Math.sin(playerAngle) * pR;
+  for (let i = 0; i < 60; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 80 + Math.random() * 300;
+    particles.push({
+      x: px, y: py,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      size: (3 + Math.random() * 8) * dpr,
+      life: 1, decay: 0.6 + Math.random() * 0.6,
+      h: pc.h + (Math.random()-0.5)*40, s: pc.s, l: pc.l + Math.random()*20,
+      shrink: true, maxAlpha: 1,
+    });
+  }
+}
+
+// --- SPAWNING ---
+function spawnEntity() {
+  const angle = Math.random() * Math.PI * 2;
+  const depth = 450 + Math.random() * 50;
+
+  // Weighted spawn: mostly correct-color sparks, some wrong, occasional dark matter
+  const roll = Math.random();
+  if (roll < 0.45) {
+    // Correct color spark
+    entities.push({ type: 'spark', colorIdx: playerColorIdx, angle, depth, collected: false });
+  } else if (roll < 0.80) {
+    // Wrong color spark
+    let ci = playerColorIdx;
+    while (ci === playerColorIdx) ci = Math.floor(Math.random() * NEON_COLORS.length);
+    entities.push({ type: 'spark', colorIdx: ci, angle, depth, collected: false });
+  } else {
+    // Dark matter
+    entities.push({ type: 'dark', angle, depth, collected: false });
+  }
+}
+
+function spawnPrismGate() {
+  entities.push({ type: 'prism', angle: 0, depth: 500, newColorIdx: -1 });
+}
+
+// --- COLLISION ---
+function checkCollisions() {
+  const tubeR = Math.min(W, H) * TUBE_RADIUS;
+  const pR = 0.82;
+  const collectDist = 0.08; // angle + depth threshold
+
+  for (let i = entities.length - 1; i >= 0; i--) {
+    const e = entities[i];
+    if (e.collected || e.depth > 50) continue;
+
+    if (e.type === 'prism') {
+      if (e.depth < 10 && e.depth > -10 && !e.collected) {
+        e.collected = true;
+        // Change color
+        let newIdx = playerColorIdx;
+        while (newIdx === playerColorIdx) newIdx = Math.floor(Math.random() * NEON_COLORS.length);
+        playerColorIdx = newIdx;
+        sfxPrism();
+        screenFlash.alpha = 0.4;
+        screenFlash.color = NEON_COLORS[newIdx].hex;
+        updateColorIndicator();
+      }
+      continue;
+    }
+
+    // Check proximity
+    const ad = Math.abs(angleDiff(playerAngle, e.angle));
+    const dd = Math.abs(e.depth);
+    if (ad < 0.4 && dd < 25) {
+      if (e.type === 'spark') {
+        e.collected = true;
+        if (e.colorIdx === playerColorIdx) {
+          // Correct — grow!
+          score += Math.floor(10 * speed);
+          playerSize = Math.min(3, playerSize + 0.05);
+          playerSquish = { x: 1.2, y: 0.85 };
+          sfxCollect();
+          const pos = getEntityScreenPos(e.angle, e.depth);
+          spawnCollectParticles(pos.x, pos.y, NEON_COLORS[e.colorIdx], 8);
+        } else {
+          // Wrong color — shrink!
+          playerSize = Math.max(0.3, playerSize - 0.15);
+          playerSquish = { x: 0.8, y: 1.2 };
+          sfxWrong();
+          screenFlash.alpha = 0.2;
+          screenFlash.color = '#ff0040';
+          cameraShake.t = 0.15;
+        }
+      } else if (e.type === 'dark') {
+        // Death!
+        e.collected = true;
+        die();
+      }
+    }
+  }
+}
+
+function die() {
+  if (!gameActive) return;
+  gameActive = false;
+  deathAnim = 1;
+  sfxDeath();
+  spawnDeathParticles();
+  screenFlash.alpha = 0.6;
+  screenFlash.color = '#ff0040';
+  cameraShake.t = 0.4;
+
+  if (score > bestScore) {
+    bestScore = score;
+    try { localStorage.setItem('lumina_best', bestScore); } catch(e) {}
+  }
+
+  setTimeout(() => {
+    const ov = document.getElementById('overlay');
+    document.getElementById('final-score-row').style.display = '';
+    document.getElementById('final-score-val').textContent = score;
+    document.getElementById('best-row').textContent = `BEST: ${bestScore}`;
+    document.getElementById('overlay-title').textContent = 'SHATTERED';
+    document.getElementById('overlay-title').style.background = 'linear-gradient(90deg,#ff0044,#ff3366)';
+    document.getElementById('overlay-title').style.webkitBackgroundClip = 'text';
+    document.getElementById('overlay-title').style.backgroundClip = 'text';
+    document.getElementById('play-btn').textContent = 'RETRY';
+    ov.classList.remove('hidden');
+  }, 1200);
+}
+
+// --- UPDATE ---
+function update(dt) {
+  if (!gameActive) {
+    // Still update particles
+    updateParticles(dt);
+    deathAnim = Math.max(0, deathAnim - dt);
+    return;
+  }
+
+  gameTime += dt;
+  speed = 1 + gameTime * SPEED_INCREASE;
+
+  // Move player — steerInput controls angular velocity
+  const turnSpeed = 5.0; // radians per second at full input
+  let keySteer = 0;
+  if (keysDown.left) keySteer -= 1;
+  if (keysDown.right) keySteer += 1;
+  if (dragging) {
+    playerAngle += steerInput * turnSpeed * dt;
+  }
+  if (keySteer !== 0) {
+    playerAngle += keySteer * turnSpeed * dt;
+  }
+
+  // Squish recovery
+  playerSquish.x = lerp(playerSquish.x, 1, dt * 8);
+  playerSquish.y = lerp(playerSquish.y, 1, dt * 8);
+
+  // Size decay
+  playerSize = Math.max(0.5, playerSize - dt * 0.02);
+
+  // Move entities toward camera
+  const moveSpeed = 200 * speed;
+  for (let i = entities.length - 1; i >= 0; i--) {
+    entities[i].depth -= moveSpeed * dt;
+    if (entities[i].depth < -50 || entities[i].collected) {
+      entities.splice(i, 1);
+    }
+  }
+
+  // Spawn
+  const spawnInterval = SPAWN_INTERVAL_BASE / (0.5 + speed * 0.5);
+  spawnTimer += dt;
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnEntity();
+    // Sometimes spawn clusters
+    if (Math.random() < 0.3) spawnEntity();
+  }
+
+  // Prism gates
+  prismTimer += dt;
+  const prismInterval = 8 / Math.sqrt(speed);
+  if (prismTimer >= prismInterval) {
+    prismTimer = 0;
+    spawnPrismGate();
+  }
+
+  // Tube scroll
+  tubeZ += moveSpeed * dt;
+
+  // Collisions
+  checkCollisions();
+
+  // Particles
+  updateParticles(dt);
+
+  // Camera shake
+  if (cameraShake.t > 0) {
+    cameraShake.t -= dt;
+    const intensity = cameraShake.t * 15;
+    cameraShake.x = (Math.random() - 0.5) * intensity * dpr;
+    cameraShake.y = (Math.random() - 0.5) * intensity * dpr;
+  } else {
+    cameraShake.x = 0; cameraShake.y = 0;
+  }
+
+  // Screen flash
+  if (screenFlash.alpha > 0) screenFlash.alpha -= dt * 3;
+
+  // HUD
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('speed-label').textContent = `SPEED ×${speed.toFixed(1)}`;
+  const sizeBar = document.getElementById('size-bar');
+  const sizePct = Math.min(100, ((playerSize - 0.3) / 2.7) * 100);
+  sizeBar.style.width = sizePct + '%';
+  sizeBar.style.background = getPlayerColor().hex;
+}
+
+function updateParticles(dt) {
+  for (const p of particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.97; p.vy *= 0.97;
+    p.life -= p.decay * dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+}
+
+function updateColorIndicator() {
+  const ci = document.getElementById('color-indicator');
+  const pc = getPlayerColor();
+  ci.style.background = pc.hex;
+  ci.style.color = pc.hex;
+  ci.style.boxShadow = `0 0 15px ${pc.hex}`;
+}
+
+// --- RENDER ---
+function render() {
+  X.fillStyle = '#000';
+  X.fillRect(0, 0, W, H);
+
+  // Ambient glow behind tube
+  const pc = getPlayerColor();
+  const ambGrad = X.createRadialGradient(cx, cy, 0, cx, cy, W * 0.5);
+  ambGrad.addColorStop(0, hsl(pc.h, 40, 15, 0.15));
+  ambGrad.addColorStop(1, 'transparent');
+  X.fillStyle = ambGrad;
+  X.fillRect(0, 0, W, H);
+
+  drawTube();
+  drawEntities();
+  drawPlayer();
+  drawParticles();
+
+  // Screen flash
+  if (screenFlash.alpha > 0) {
+    X.fillStyle = screenFlash.color;
+    X.globalAlpha = screenFlash.alpha * 0.3;
+    X.fillRect(0, 0, W, H);
+    X.globalAlpha = 1;
+  }
+
+  // Vignette
+  const vigGrad = X.createRadialGradient(cx, cy, H * 0.3, cx, cy, H * 0.7);
+  vigGrad.addColorStop(0, 'transparent');
+  vigGrad.addColorStop(1, 'rgba(0,0,0,0.5)');
+  X.fillStyle = vigGrad;
+  X.fillRect(0, 0, W, H);
+}
+
+// --- MAIN LOOP ---
+let lastTime = 0;
+function loop(now) {
+  const dt = Math.min(50, now - (lastTime || now)) / 1000;
+  lastTime = now;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+// --- INPUT ---
+// Steering: pointer X position relative to screen center controls turn speed
+// Left of center = rotate counter-clockwise, right = clockwise
+// Further from center = faster turning
+let pointerX = 0;
+let steerInput = 0; // -1 to 1
+
+function onPointerDown(e) {
+  if (!gameActive) return;
+  initAudio();
+  dragging = true;
+  const clientX = (e.touches ? e.touches[0] : e).clientX;
+  pointerX = clientX;
+  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  document.getElementById('instructions').classList.add('hidden');
+}
+
+function onPointerMove(e) {
+  if (!dragging || !gameActive) return;
+  const clientX = (e.touches ? e.touches[0] : e).clientX;
+  pointerX = clientX;
+  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  // Clamp
+  steerInput = Math.max(-1, Math.min(1, steerInput));
+}
+
+function onPointerUp() { dragging = false; steerInput = 0; }
+
+C.addEventListener('pointerdown', onPointerDown);
+C.addEventListener('pointermove', onPointerMove);
+C.addEventListener('pointerup', onPointerUp);
+C.addEventListener('pointerleave', onPointerUp);
+
+let keysDown = {};
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { keysDown.left = true; e.preventDefault(); }
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { keysDown.right = true; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keysDown.left = false;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keysDown.right = false;
+});
+
+// --- GAME FLOW ---
+function startGame() {
+  score = 0;
+  speed = 1;
+  playerAngle = -Math.PI / 2; // top
+  playerSize = 1;
+  playerColorIdx = 0;
+  playerTrail = [];
+  playerSquish = { x: 1, y: 1 };
+  entities = [];
+  particles = [];
+  spawnTimer = 0;
+  prismTimer = 0;
+  gameTime = 0;
+  deathAnim = 0;
+  screenFlash = { alpha: 0, color: '#fff' };
+  cameraShake = { x: 0, y: 0, t: 0 };
+  gameActive = true;
+  dragging = false;
+  updateColorIndicator();
+  document.getElementById('overlay').classList.add('hidden');
+  if (!instructionsShown) {
+    document.getElementById('instructions').classList.remove('hidden');
+    instructionsShown = true;
+  }
+}
+
+document.getElementById('play-btn').addEventListener('click', () => { initAudio(); startGame(); });
+
+// --- RESIZE ---
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth * dpr;
+  H = window.innerHeight * dpr;
+  C.width = W; C.height = H;
+  C.style.width = window.innerWidth + 'px';
+  C.style.height = window.innerHeight + 'px';
+  cx = W / 2; cy = H / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Load best
+try { bestScore = parseInt(localStorage.getItem('lumina_best') || '0'); } catch(e) {}
+document.getElementById('best-row').textContent = bestScore > 0 ? `BEST: ${bestScore}` : '';
+
+updateColorIndicator();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
