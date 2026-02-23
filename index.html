@@ -712,14 +712,14 @@ function onTouchStart(e) {
   initAudio();
   dragging = true;
   const clientX = e.touches[0].clientX;
-  steerInput = -(clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
   document.getElementById('instructions').classList.add('hidden');
 }
 
 function onTouchMove(e) {
   if (!dragging || !gameActive) return;
   const clientX = e.touches[0].clientX;
-  steerInput = -(clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
   steerInput = Math.max(-1, Math.min(1, steerInput));
 }
 
