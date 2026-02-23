@@ -20,12 +20,39 @@ Three-file structure:
 
 ## Key Game Constants
 
-- `PLAYER_SIZE = 22`, `MAX_LIVES = 3`, `SLOW_MO_DURATION = 3000ms`
-- Good glyphs: 45% spawn rate, green (`#00ff41`), +10 score × combo multiplier
-- Bad glyphs: 55% spawn rate, red (`#ff3333`), -1 life on hit
+- `PLAYER_SIZE = 31`, `MAX_LIVES = 3`, `SLOW_MO_DURATION = 3000ms`
+- `NEAR_MISS_RADIUS = 1.7`, `NEAR_MISS_SCORE = 25`
+- Score formula: `10 × (1 + combo × 0.5)` per good glyph collected
 - Power-ups: 4% chance per spawn cycle, cyan (`#00ffff`), refills slow-mo energy
-- Spawn rate: starts at 0.6s, decreases to 0.15s as difficulty ramps
-- Difficulty = `min(score / 500, 8)`
+
+## Entity Types
+
+- **Good glyphs**: green (`#00ff41`), collect for points + combo. Spawn ratio varies by wave (55% in wave 1 → 25% minimum).
+- **Bad glyphs**: red (`#ff3333`), dodge or lose a life. Reset combo on hit.
+- **Splitter glyphs**: larger bad entities (⬢) that split into 2–4 smaller threats at 45% screen height. Appear from wave 5+.
+- **Power-ups**: cyan hexagon (`#00ffff`), refills slow-mo energy and grants 50 bonus points.
+
+## Wave System
+
+8 predefined waves with escalating difficulty, then infinite dynamic waves. Each wave defines:
+- `sr`: spawn rate interval (0.65s → 0.15s minimum)
+- `gr`: good glyph ratio (55% → 25% minimum)
+- `sm`: speed multiplier (0.8× → 1.5×+)
+- `pat`: available patterns — `normal`, `zigzag`, `cluster`, `splitter`
+- `br`: breather duration between waves (3–5s), player regains 1 life if below max
+
+Difficulty is wave-based: `difficulty = currentWave + (waveTimer / waveDuration) * 0.5`
+
+## Key Features
+
+- **Near-miss system**: passing within 1.7× hit distance of a bad glyph scores 25 bonus points with visual/audio feedback
+- **Tutorial**: 4-step interactive tutorial on first play (move, collect, dodge, bullet time), stored in localStorage
+- **Pause**: P key or HUD button, with resume/quit options
+- **Persistent stats**: lifetime stats tracked in localStorage (games played, best score, highest wave, total collected/dodged, etc.)
+- **Screen shake**: camera shake on taking damage
+- **Player trail**: ghostly echo effect when moving fast
+- **Slow-mo radar ring**: expanding ring visual during bullet time
+- **CrazyGames SDK**: ad integration (midgame ads after game over), score persistence, happytime triggers
 
 ## Repository
 
