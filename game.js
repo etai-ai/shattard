@@ -305,37 +305,34 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 let audioCtx = null, audioUnlocked = false;
 // Tiny silent WAV for iOS audio session unlock
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-function initAudio() {
+async function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch (_) {}
+  }
   if (!audioUnlocked) {
-    // HTML5 Audio element unlocks iOS audio session (works past silent switch)
+    // HTML5 Audio element unlocks iOS audio session when this play() succeeds.
     const a = new Audio(SILENT_WAV);
-    a.play().catch(() => {});
-    // Also play a silent oscillator into the Web Audio context
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    g.gain.value = 0;
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(0); o.stop(audioCtx.currentTime + 0.001);
-    audioUnlocked = true;
+    a.playsInline = true;
+    let htmlAudioUnlocked = false;
+    try {
+      await a.play();
+      htmlAudioUnlocked = true;
+    } catch (_) {}
+    if (htmlAudioUnlocked && audioCtx.state === 'running') {
+      // Also prime a silent oscillator in the Web Audio graph.
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      g.gain.value = 0;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(0); o.stop(audioCtx.currentTime + 0.001);
+      audioUnlocked = true;
+    }
   }
 }
 // Re-resume audio on every user gesture — iOS suspends the context on
 // tab switch, lock screen, and after ads, so a one-shot listener isn't enough.
-function _unlockAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  if (!audioUnlocked) {
-    const a = new Audio(SILENT_WAV);
-    a.play().catch(() => {});
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    g.gain.value = 0;
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(0); o.stop(audioCtx.currentTime + 0.001);
-    audioUnlocked = true;
-  }
+async function _unlockAudio() {
+  await initAudio();
 }
 document.addEventListener('touchstart', _unlockAudio, { passive: true });
 document.addEventListener('touchend', _unlockAudio, { passive: true });
@@ -346,7 +343,10 @@ document.addEventListener('visibilitychange', () => {
 });
 function playTone(freq, dur, vol=0.3, type='sine') {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  if (audioCtx.state !== 'running') return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
