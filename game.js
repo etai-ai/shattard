@@ -316,18 +316,27 @@ function initAudio() {
     audioUnlocked = true;
   }
 }
-// Unlock audio on the very first user gesture (iOS requires touchend)
+// Re-resume audio on every user gesture — iOS suspends the context on
+// tab switch, lock screen, and after ads, so a one-shot listener isn't enough.
 function _unlockAudio() {
-  initAudio();
-  document.removeEventListener('touchstart', _unlockAudio);
-  document.removeEventListener('touchend', _unlockAudio);
-  document.removeEventListener('click', _unlockAudio);
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioUnlocked) {
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+    audioUnlocked = true;
+  }
 }
 document.addEventListener('touchstart', _unlockAudio, { passive: true });
 document.addEventListener('touchend', _unlockAudio, { passive: true });
 document.addEventListener('click', _unlockAudio);
 function playTone(freq, dur, vol=0.3, type='sine') {
-  if (!audioCtx) return;
+  if (!audioCtx || audioCtx.state === 'suspended') return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
