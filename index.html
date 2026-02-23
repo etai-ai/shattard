@@ -56,7 +56,7 @@ canvas{display:block;width:100vw;height:100dvh}
   <button class="play-btn" id="play-btn">PLAY</button>
 </div>
 
-<div id="instructions">hold left or right to steer · match your color · avoid the rest</div>
+<div id="instructions">left/right click or arrow keys to steer · match your color · avoid the rest</div>
 
 <script>
 const C = document.getElementById('c');
@@ -516,14 +516,14 @@ function update(dt) {
 
   // Move player — steerInput controls angular velocity
   const turnSpeed = 5.0; // radians per second at full input
-  let keySteer = 0;
-  if (keysDown.left) keySteer -= 1;
-  if (keysDown.right) keySteer += 1;
+  let steer = 0;
+  if (keysDown.left || mouseLeft) steer -= 1;
+  if (keysDown.right || mouseRight) steer += 1;
   if (dragging) {
     playerAngle += steerInput * turnSpeed * dt;
   }
-  if (keySteer !== 0) {
-    playerAngle += keySteer * turnSpeed * dt;
+  if (steer !== 0) {
+    playerAngle += steer * turnSpeed * dt;
   }
 
   // Squish recovery
@@ -660,31 +660,47 @@ function loop(now) {
 let pointerX = 0;
 let steerInput = 0; // -1 to 1
 
-function onPointerDown(e) {
+let mouseLeft = false, mouseRight = false;
+
+function onMouseDown(e) {
   if (!gameActive) return;
   initAudio();
-  dragging = true;
-  const clientX = (e.touches ? e.touches[0] : e).clientX;
-  pointerX = clientX;
-  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  e.preventDefault();
+  if (e.button === 0) mouseLeft = true;
+  if (e.button === 2) mouseRight = true;
   document.getElementById('instructions').classList.add('hidden');
 }
 
-function onPointerMove(e) {
+function onMouseUp(e) {
+  if (e.button === 0) mouseLeft = false;
+  if (e.button === 2) mouseRight = false;
+}
+
+// Touch: use left/right side of screen
+function onTouchStart(e) {
+  if (!gameActive) return;
+  initAudio();
+  dragging = true;
+  const clientX = e.touches[0].clientX;
+  steerInput = -(clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+  document.getElementById('instructions').classList.add('hidden');
+}
+
+function onTouchMove(e) {
   if (!dragging || !gameActive) return;
-  const clientX = (e.touches ? e.touches[0] : e).clientX;
-  pointerX = clientX;
-  steerInput = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-  // Clamp
+  const clientX = e.touches[0].clientX;
+  steerInput = -(clientX - window.innerWidth / 2) / (window.innerWidth / 2);
   steerInput = Math.max(-1, Math.min(1, steerInput));
 }
 
-function onPointerUp() { dragging = false; steerInput = 0; }
+function onTouchEnd() { dragging = false; steerInput = 0; }
 
-C.addEventListener('pointerdown', onPointerDown);
-C.addEventListener('pointermove', onPointerMove);
-C.addEventListener('pointerup', onPointerUp);
-C.addEventListener('pointerleave', onPointerUp);
+C.addEventListener('mousedown', onMouseDown);
+window.addEventListener('mouseup', onMouseUp);
+C.addEventListener('contextmenu', e => e.preventDefault());
+C.addEventListener('touchstart', onTouchStart);
+C.addEventListener('touchmove', onTouchMove);
+C.addEventListener('touchend', onTouchEnd);
 
 let keysDown = {};
 window.addEventListener('keydown', e => {
