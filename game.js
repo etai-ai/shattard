@@ -304,21 +304,32 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 // ─── AUDIO ───
 let audioCtx = null;
 
+// DEBUG: temporary overlay to diagnose iOS audio — remove after fixing
+const _dbg = document.createElement('div');
+_dbg.style.cssText = 'position:fixed;bottom:60px;left:8px;z-index:9999;color:#0f0;font:11px monospace;background:#000a;padding:4px 8px;border-radius:4px;pointer-events:none';
+document.body.appendChild(_dbg);
+function _dbgUpdate(extra) {
+  const has = !!navigator.audioSession;
+  const type = has ? navigator.audioSession.type : 'N/A';
+  const state = audioCtx ? audioCtx.state : 'no ctx';
+  _dbg.textContent = `audioSession:${has} type:${type} ctx:${state} ${extra||''}`;
+}
+
 function initAudio() {
   // Set audio session to "playback" so iOS ignores the mute switch.
-  // Must be set before creating/resuming AudioContext.
-  // See: https://bugs.webkit.org/show_bug.cgi?id=237322
   if (navigator.audioSession) {
     navigator.audioSession.type = 'playback';
   }
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  // Re-apply after context exists (some iOS versions need this order)
   if (navigator.audioSession) {
     navigator.audioSession.type = 'playback';
   }
   audioCtx.resume();
+  _dbgUpdate('init');
+  // Keep updating state
+  setInterval(() => _dbgUpdate(), 2000);
 }
 
 // Re-resume on later gestures (handles tab-switch, backgrounding)
