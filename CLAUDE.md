@@ -14,7 +14,7 @@ Open `index.html` in a browser. There is no build step, package manager, or dev 
 
 Three-file structure:
 
-- **`index.html`**: HTML markup only — two canvases (`#rain` for background, `#gameCanvas` for gameplay), three screens (`#titleScreen`, `#hud` + game, `#gameOver`) toggled via `.hidden` class, flash overlay, scanlines. Inline `onclick` handlers reference functions in `game.js`. Loads CrazyGames SDK, `styles.css`, and `game.js`.
+- **`index.html`**: HTML markup only — two canvases (`#rain` for background, `#gameCanvas` for gameplay), three screens (`#titleScreen`, `#hud` + game, `#gameOver`) toggled via `.hidden` class, flash overlay, scanlines. Inline `onclick` handlers reference functions in `game.js`. Loads CrazyGames SDK (async), `styles.css`, and `game.js`.
 - **`styles.css`**: Matrix-green theme via CSS variables (`--matrix-green`, `--glow`, etc.), screen transitions, HUD, scanline overlay, slow-mo bar, tutorial, pause overlay, wave announcements, near-miss text. Fonts: Share Tech Mono + Orbitron (Google Fonts via `@import`).
 - **`game.js`**: All game logic — CrazyGames SDK wrapper, persistent stats (localStorage), matrix rain background, game state, entity spawning (good/bad/power/splitter/cluster), input (touch + mouse), pause, audio (Web Audio API sfx), tutorial animations, wave system, game loop (`requestAnimationFrame` → `gameLoop` → `update` → `render`), collision (distance-based via `Math.hypot`), rendering (vignette, entity trails, glyph text with glow, particle system, player as layered geometry avatar).
 
@@ -52,7 +52,8 @@ Difficulty is wave-based: `difficulty = currentWave + (waveTimer / waveDuration)
 - **Screen shake**: camera shake on taking damage
 - **Player trail**: ghostly echo effect when moving fast
 - **Slow-mo radar ring**: expanding ring visual during bullet time
-- **CrazyGames SDK**: ad integration (midgame ads after game over), score persistence, happytime triggers
+- **Audio**: Web Audio API oscillator-based sfx. Uses `navigator.audioSession.type = 'playback'` (iOS 17+) to bypass the hardware mute switch. AudioContext created inside user gesture (`startGame` onclick) for reliable iOS unlock. Re-resumes on touchend/click/visibilitychange.
+- **CrazyGames SDK**: loaded async; ad integration (midgame ads after game over), score persistence, happytime triggers. All calls are no-ops when SDK is unavailable (e.g. GitHub Pages).
 
 ## Repository
 
