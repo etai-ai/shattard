@@ -305,30 +305,34 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 let audioCtx = null, audioUnlocked = false;
 // Tiny silent WAV for iOS audio session unlock
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const resumePromise = audioCtx.state !== 'running'
-    ? audioCtx.resume().catch(() => {})
-    : Promise.resolve();
+
+  // Safari requires unlocking to happen SYNCHRONOUSLY within the user event.
   if (!audioUnlocked) {
-    // HTML5 Audio element unlocks iOS audio session when this play() succeeds.
+    // 1. Prime a silent oscillator in the Web Audio graph immediately
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    // Use setValueAtTime for better WebKit compatibility instead of g.gain.value = 0
+    g.gain.setValueAtTime(0, audioCtx.currentTime); 
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start(0);
+    o.stop(audioCtx.currentTime + 0.001);
+
+    // 2. Prime the HTML5 Audio element synchronously
     const a = new Audio(SILENT_WAV);
     a.playsInline = true;
-    const playPromise = a.play();
-    Promise.allSettled([resumePromise, playPromise]).then((results) => {
-      const playOk = results[1]?.status === 'fulfilled';
-      if (playOk && audioCtx && audioCtx.state === 'running') {
-        // Also prime a silent oscillator in the Web Audio graph.
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        g.gain.value = 0;
-        o.connect(g); g.connect(audioCtx.destination);
-        o.start(0); o.stop(audioCtx.currentTime + 0.001);
-        audioUnlocked = true;
-      }
-    });
-    return;
+    a.play().catch(() => {}); // Catch safely without delaying execution
+
+    audioUnlocked = true;
   }
-  return resumePromise;
+
+  // 3. Ensure the context is running
+  if (audioCtx.state !== 'running') {
+    audioCtx.resume().catch(() => {});
+  }
 }
 // Re-resume audio on every user gesture — iOS suspends the context on
 // tab switch, lock screen, and after ads, so a one-shot listener isn't enough.
