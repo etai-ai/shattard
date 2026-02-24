@@ -302,21 +302,48 @@ function showBreather(dur) {
 function hideBreather() { document.getElementById('breatherBar').classList.remove('visible'); }
 
 // ─── AUDIO ───
-let audioCtx = null;
+let audioCtx = null, _silentTag = null;
+
+// Build a valid silent WAV data URI at runtime (8-bit PCM, mono, 8kHz, 1s).
+// Playing this in a looping <audio> element forces iOS to switch the audio
+// session from "ambient" (respects mute switch) to "playback" (ignores it).
+const _silentWavURI = (() => {
+  const sr = 8000, n = sr; // 1 second of silence
+  const buf = new Uint8Array(44 + n);
+  const dv = new DataView(buf.buffer);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) buf[o + i] = s.charCodeAt(i); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + n, true); w(8, 'WAVE');
+  w(12, 'fmt '); dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);  // PCM
+  dv.setUint16(22, 1, true);  // mono
+  dv.setUint32(24, sr, true); // sample rate
+  dv.setUint32(28, sr, true); // byte rate
+  dv.setUint16(32, 1, true);  // block align
+  dv.setUint16(34, 8, true);  // 8 bits per sample
+  w(36, 'data'); dv.setUint32(40, n, true);
+  for (let i = 44; i < 44 + n; i++) buf[i] = 128; // 128 = silence for unsigned 8-bit
+  let bin = ''; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+})();
 
 function initAudio() {
-  // Create AudioContext directly inside user gesture (startGame onclick).
-  // This is the simplest, most reliable iOS unlock — no tricks needed.
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  // Resume must happen inside a user gesture for iOS Safari
   audioCtx.resume();
+  // Start looping silent <audio> to bypass iOS mute switch
+  if (!_silentTag) {
+    _silentTag = new Audio(_silentWavURI);
+    _silentTag.loop = true;
+    _silentTag.volume = 0.01;
+    _silentTag.play().catch(() => {});
+  }
 }
 
 // Also try to resume on any later gesture (handles tab-switch, backgrounding)
 function _resumeAudio() {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if (_silentTag && _silentTag.paused) _silentTag.play().catch(() => {});
 }
 document.addEventListener('touchend', _resumeAudio, { passive: true });
 document.addEventListener('click', _resumeAudio);
