@@ -303,35 +303,46 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 
 // ─── AUDIO ───
 let audioCtx = null, audioUnlocked = false;
-// Tiny silent WAV for iOS audio session unlock
-const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+// Silent looping <audio> tag keeps iOS audio session in "media" mode so
+// Web Audio (oscillators) bypass the hardware mute/ringer switch.
+let iosSilentTag = null;
+
+// Detect iOS (iPhone/iPad/iPod, including iPad pretending to be Mac)
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (/mac os x/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0);
+
+// Tiny silent MP3 (~200ms), base64-encoded — loops continuously on iOS
+const SILENT_MP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwMHAAAAAAD/+1DEAAAHAAGf9AAAIiWcM/8xIABERGRkZP/E4jBGP/xERf/xERERH//xERP/xER///iIj//ERERERERERERERERERERERH///iIiIiIiIiIiIiIiIiIiIiJf//ERERERERERERERERERERERH////iIiIiIiIiP/7UMQTgAjEAaf+YkABH4A0f8xIAIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH///+IiIiIiIiI//tQxCMAB2wBq/mGACDwADV/MEAEiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIiJf/8RERERERERERERERERERERERER////iIiIiIiIj/+1DEQAAHIAGn+YYAIOeANX8wwAAAAiIiIiIiIiJf//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX///EREREREREREP/7UMRSAAZUAZ/5ggAggAAz/wAAABEREREREREREf///+IiIiIiIj///xERERERH////iIiIj////xEREREREREREREREREREREREREREf///+IiIiIiIiIiIiIiP///ERERERERH////iIiIj///xEREREREREREREf///+IiIiIiIj//xERERERERERERH///+IiIiIiIiIiIiI//tQxHIABPABm/gAAACAADN/AAAAP///ERERERERERERERH///+IiIiIiIiIiIiIj///xERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI';
+
+function _startSilentTag() {
+  if (iosSilentTag || !isIOS) return;
+  iosSilentTag = new Audio(SILENT_MP3);
+  iosSilentTag.loop = true;
+  iosSilentTag.playsInline = true;
+  iosSilentTag.setAttribute('playsinline', '');
+  iosSilentTag.play().catch(() => {});
+}
+
+function _stopSilentTag() {
+  if (!iosSilentTag) return;
+  iosSilentTag.pause();
+  iosSilentTag.removeAttribute('src');
+  iosSilentTag.load();
+  iosSilentTag = null;
+}
 
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-  // Safari requires unlocking to happen SYNCHRONOUSLY within the user event.
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   if (!audioUnlocked) {
-    // 1. Prime a silent oscillator in the Web Audio graph immediately
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    // Use setValueAtTime for better WebKit compatibility instead of g.gain.value = 0
-    g.gain.setValueAtTime(0, audioCtx.currentTime); 
-    o.connect(g);
-    g.connect(audioCtx.destination);
-    o.start(0);
-    o.stop(audioCtx.currentTime + 0.001);
-
-    // 2. Prime the HTML5 Audio element synchronously
-    const a = new Audio(SILENT_WAV);
-    a.playsInline = true;
-    a.play().catch(() => {}); // Catch safely without delaying execution
-
+    // Start the silent looping tag on iOS to force media audio session
+    _startSilentTag();
+    // Also prime a silent oscillator in the Web Audio graph
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    g.gain.setValueAtTime(0, audioCtx.currentTime);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(0); o.stop(audioCtx.currentTime + 0.001);
     audioUnlocked = true;
-  }
-
-  // 3. Ensure the context is running
-  if (audioCtx.state !== 'running') {
-    audioCtx.resume().catch(() => {});
   }
 }
 // Re-resume audio on every user gesture — iOS suspends the context on
@@ -344,18 +355,19 @@ document.addEventListener('touchend', _unlockAudio, { passive: true, capture: tr
 document.addEventListener('pointerdown', _unlockAudio, { passive: true, capture: true });
 document.addEventListener('click', _unlockAudio, { capture: true });
 document.addEventListener('keydown', _unlockAudio, { capture: true });
-// Re-resume after tab becomes visible again (iOS suspends audio in background)
+// Re-resume after tab becomes visible again
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+  if (document.hidden) {
+    // Stop silent tag when backgrounded (hides iOS lock screen media widget)
+    _stopSilentTag();
+  } else {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    if (audioUnlocked) _startSilentTag();
+  }
 });
 function playTone(freq, dur, vol=0.3, type='sine') {
   if (!audioCtx) return;
-  if (audioCtx.state !== 'running') {
-    audioCtx.resume().then(() => {
-      if (audioCtx && audioCtx.state === 'running') playTone(freq, dur, vol, type);
-    }).catch(() => {});
-    return;
-  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
