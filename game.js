@@ -123,6 +123,8 @@ let shakeTimer = 0, shakeIntensity = 0;
 const PLAYER_TRAIL_MAX = 12, PLAYER_TRAIL_SPEED_THRESHOLD = 3;
 
 const PLAYER_SIZE = 29, MAX_LIVES = 3, TOUCH_Y_OFFSET = -80, SLOW_MO_DURATION = 3000;
+const MAX_PLAY_WIDTH = 500;
+let playL = 0, playR = 0;
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
 const NEAR_MISS_RADIUS = 1.7, NEAR_MISS_SCORE = 25;
 
@@ -144,7 +146,12 @@ function getWave(n) {
     sr: Math.max(0.15, b.sr - e*0.015), gr: Math.max(0.25, b.gr - e*0.01), sm: b.sm + e*0.08 };
 }
 
-function resizeGame() { W = gc.width = window.innerWidth; H = gc.height = window.innerHeight; }
+function resizeGame() {
+  W = gc.width = window.innerWidth; H = gc.height = window.innerHeight;
+  const pw = Math.min(W, MAX_PLAY_WIDTH);
+  playL = (W - pw) / 2;
+  playR = playL + pw;
+}
 
 // ─── SPAWNING ───
 function spawnGlyph() {
@@ -154,7 +161,7 @@ function spawnGlyph() {
   const isGood = Math.random() < w.gr;
   const ent = {
     type: isGood ? 'good' : 'bad',
-    x: Math.random() * (W - 40) + 20, y: -30,
+    x: playL + Math.random() * (playR - playL - 40) + 20, y: -30,
     size: isGood ? 27 : (21 + Math.random() * 13),
     speed: (1.5 + Math.random() * 1.5) * w.sm * (isGood ? 0.8 : 1),
     char: CHARS[Math.floor(Math.random() * CHARS.length)],
@@ -171,7 +178,7 @@ function spawnGlyph() {
   waveGlyphsSpawned++;
 }
 function spawnCluster(w) {
-  const cx = Math.random() * (W - 100) + 50, count = 3 + Math.floor(Math.random() * 3);
+  const cx = playL + Math.random() * (playR - playL - 100) + 50, count = 3 + Math.floor(Math.random() * 3);
   for (let i = 0; i < count; i++) {
     const isGood = i === 0 && Math.random() < 0.3;
     entities.push({
@@ -206,7 +213,7 @@ function splitEntity(e) {
 }
 function spawnPowerUp() {
   entities.push({
-    type:'power', x: Math.random()*(W-60)+30, y:-30,
+    type:'power', x: playL + Math.random()*(playR - playL - 60)+30, y:-30,
     size:29, speed:1+Math.random(), char:'⬡', alpha:1,
     wobble:0, wobbleSpeed:3, wobbleAmp:15, pulsePhase:0,
     trail:[], nearMissed:false, isSplitter:false, hasSplit:false,
@@ -235,26 +242,27 @@ function emitNearMissParticles(x,y) {
 }
 
 function initPlayer() {
-  player = { x:W/2, y:H*0.8, targetX:W/2, targetY:H*0.8, size:PLAYER_SIZE, glowPhase:0, orbitPhase:0, radarRing:0, prevX:W/2, prevY:H*0.8 };
+  const cx = (playL + playR) / 2;
+  player = { x:cx, y:H*0.8, targetX:cx, targetY:H*0.8, size:PLAYER_SIZE, glowPhase:0, orbitPhase:0, radarRing:0, prevX:cx, prevY:H*0.8 };
   playerTrail = [];
 }
 
 // ─── INPUT ───
 gc.addEventListener('touchstart', (e) => {
   e.preventDefault(); const t = e.touches[0]; touching = true;
-  player.targetX = t.clientX; player.targetY = t.clientY + TOUCH_Y_OFFSET;
+  player.targetX = Math.max(playL, Math.min(playR, t.clientX)); player.targetY = t.clientY + TOUCH_Y_OFFSET;
   const now = Date.now(); if (now - lastTap < 300) activateSlowMo(); lastTap = now;
 }, { passive: false });
 gc.addEventListener('touchmove', (e) => {
   e.preventDefault(); if (!touching) return;
-  const t = e.touches[0]; player.targetX = t.clientX; player.targetY = t.clientY + TOUCH_Y_OFFSET;
+  const t = e.touches[0]; player.targetX = Math.max(playL, Math.min(playR, t.clientX)); player.targetY = t.clientY + TOUCH_Y_OFFSET;
 }, { passive: false });
 gc.addEventListener('touchend', () => { touching = false; });
 gc.addEventListener('mousedown', (e) => {
-  touching = true; player.targetX = e.clientX; player.targetY = e.clientY;
+  touching = true; player.targetX = Math.max(playL, Math.min(playR, e.clientX)); player.targetY = e.clientY;
   const now = Date.now(); if (now - lastTap < 300) activateSlowMo(); lastTap = now;
 });
-gc.addEventListener('mousemove', (e) => { if (touching) { player.targetX = e.clientX; player.targetY = e.clientY; } });
+gc.addEventListener('mousemove', (e) => { if (touching) { player.targetX = Math.max(playL, Math.min(playR, e.clientX)); player.targetY = e.clientY; } });
 gc.addEventListener('mouseup', () => { touching = false; });
 
 function activateSlowMo() {
@@ -612,7 +620,7 @@ function update(dt, realDt) {
   player.prevX = player.x; player.prevY = player.y;
   player.x += (player.targetX - player.x) * ease;
   player.y += (player.targetY - player.y) * ease;
-  player.x = Math.max(player.size, Math.min(W-player.size, player.x));
+  player.x = Math.max(playL+player.size, Math.min(playR-player.size, player.x));
   player.y = Math.max(player.size, Math.min(H-player.size, player.y));
   player.glowPhase += dt * 4;
   player.orbitPhase += dt * (combo > 5 ? 3.5 : 2);
@@ -652,7 +660,7 @@ function updateCommon(dt, realDt) {
   player.prevX = player.x; player.prevY = player.y;
   player.x += (player.targetX - player.x) * ease;
   player.y += (player.targetY - player.y) * ease;
-  player.x = Math.max(player.size, Math.min(W-player.size, player.x));
+  player.x = Math.max(playL+player.size, Math.min(playR-player.size, player.x));
   player.y = Math.max(player.size, Math.min(H-player.size, player.y));
   player.glowPhase += dt * 4;
   player.orbitPhase += dt * (combo > 5 ? 3.5 : 2);
@@ -749,6 +757,16 @@ function render() {
   vg.addColorStop(0,'transparent'); vg.addColorStop(1,'rgba(0,0,0,0.6)');
   ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
   if (slowMo) { ctx.fillStyle='rgba(0,255,65,0.03)'; ctx.fillRect(0,0,W,H); }
+
+  // Darken outside play area on wide screens
+  if (playL > 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, playL, H);
+    ctx.fillRect(playR, 0, W - playR, H);
+    ctx.strokeStyle = 'rgba(0,255,65,0.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(playL, 0); ctx.lineTo(playL, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(playR, 0); ctx.lineTo(playR, H); ctx.stroke();
+  }
 
   // Entities
   for (const e of entities) {
