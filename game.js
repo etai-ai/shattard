@@ -65,6 +65,13 @@ function commitSessionStats() {
 const rainCanvas = document.getElementById('rain');
 const rCtx = rainCanvas.getContext('2d');
 let rainCols, drops;
+
+// Rain reactivity state (must be before drawRain)
+let rainSpeedMult = 1;
+let rainColor = '#00ff41';
+let rainGlitchTimer = 0;
+let rainGlitchIntensity = 0;
+
 function initRain() {
   rainCanvas.width = window.innerWidth; rainCanvas.height = window.innerHeight;
   rainCols = Math.floor(rainCanvas.width / 14);
@@ -73,12 +80,28 @@ function initRain() {
 function drawRain() {
   rCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
   rCtx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
-  rCtx.fillStyle = '#00ff41'; rCtx.font = '14px Share Tech Mono';
+  rCtx.fillStyle = rainColor; rCtx.font = '14px Share Tech Mono';
   const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789';
+
+  // Glitch scatter effect on damage
+  if (rainGlitchTimer > 0) {
+    rainGlitchTimer -= 0.016;
+    const glitchAlpha = Math.min(rainGlitchTimer * 2, 1);
+    for (let g = 0; g < 6; g++) {
+      const sy = Math.floor(Math.random() * rainCanvas.height);
+      const sh = 2 + Math.random() * 6;
+      const sx = (Math.random() - 0.5) * rainGlitchIntensity * 20;
+      rCtx.save();
+      rCtx.globalAlpha = glitchAlpha * 0.6;
+      rCtx.drawImage(rainCanvas, 0, sy, rainCanvas.width, sh, sx, sy, rainCanvas.width, sh);
+      rCtx.restore();
+    }
+  }
+
   for (let i = 0; i < drops.length; i++) {
     rCtx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 14, drops[i] * 14);
     if (drops[i] * 14 > rainCanvas.height && Math.random() > 0.975) drops[i] = 0;
-    drops[i]++;
+    drops[i] += rainSpeedMult;
   }
   requestAnimationFrame(drawRain);
 }
@@ -99,7 +122,7 @@ let playerTrail = [];
 let shakeTimer = 0, shakeIntensity = 0;
 const PLAYER_TRAIL_MAX = 12, PLAYER_TRAIL_SPEED_THRESHOLD = 3;
 
-const PLAYER_SIZE = 31, MAX_LIVES = 3, TOUCH_Y_OFFSET = -80, SLOW_MO_DURATION = 3000;
+const PLAYER_SIZE = 29, MAX_LIVES = 3, TOUCH_Y_OFFSET = -80, SLOW_MO_DURATION = 3000;
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
 const NEAR_MISS_RADIUS = 1.7, NEAR_MISS_SCORE = 25;
 
@@ -503,6 +526,7 @@ function startGame() {
   totalCollected=0; totalDodged=0; totalNearMisses=0; gameRunning=true;
   lastTime=performance.now(); gameStartTime=performance.now(); sessionSlowMoMs=0; slowMoStartTime=0; paused=false;
   shakeTimer=0; shakeIntensity=0;
+  rainSpeedMult=1; rainColor='#00ff41'; rainGlitchTimer=0; rainGlitchIntensity=0;
   currentWave=0; waveTimer=0; wavePhase='announce'; announceTimer=0;
   breatherTimer=0; waveGlyphsSpawned=0; wavesCompleted=0;
   playerTrail=[];
@@ -608,6 +632,10 @@ function update(dt, realDt) {
     if (p.life<=0) particles.splice(i,1);
   }
 
+  // Rain reactivity
+  rainColor = slowMo ? '#00ffff' : '#00ff41';
+  rainSpeedMult = 1 + Math.min(combo, 30) * 0.08; // combo boosts rain speed up to ~3.4x
+
   // HUD
   document.getElementById('scoreDisplay').textContent = Math.floor(score);
   document.getElementById('comboDisplay').textContent = combo > 1 ? `x${combo} COMBO` : '';
@@ -636,6 +664,9 @@ function updateCommon(dt, realDt) {
     const p=particles[i]; p.x+=p.vx*60*dt; p.y+=p.vy*60*dt; p.vy+=2*dt; p.life-=dt;
     if (p.life<=0) particles.splice(i,1);
   }
+  // Rain reactivity (announce/breather)
+  rainColor = slowMo ? '#00ffff' : '#00ff41';
+  rainSpeedMult = 1 + Math.min(combo, 30) * 0.08;
   document.getElementById('scoreDisplay').textContent = Math.floor(score);
   document.getElementById('comboDisplay').textContent = combo > 1 ? `x${combo} COMBO` : '';
 }
@@ -680,7 +711,8 @@ function updateEntities(dt, realDt) {
       } else {
         lives--; combo = 0; updateLivesUI();
         emitParticles(e.x, e.y, '#ff3333', 20); flash('hit'); vibrate(100); sfxHit(); screenShake();
-        if (lives <= 0) { sfxDeath(); gameOver(); return; }
+        rainGlitchTimer = 0.4; rainGlitchIntensity = 1;
+        if (lives <= 0) { sfxDeath(); triggerDeathCascade(); gameOver(); return; }
       }
       entities.splice(i,1);
     }
@@ -833,13 +865,181 @@ function render() {
 
   ctx.shadowBlur=0; ctx.globalAlpha=1;
 
+  // Heartbeat vignette at 1 life
+  if (lives === 1 && gameRunning) {
+    // Heartbeat rhythm: two quick pulses then a pause (lub-dub...lub-dub...)
+    const t = performance.now() / 1000;
+    const heartCycle = t % 1.0; // 1-second cycle
+    let pulse = 0;
+    if (heartCycle < 0.1) pulse = Math.sin(heartCycle / 0.1 * Math.PI); // lub
+    else if (heartCycle > 0.15 && heartCycle < 0.25) pulse = Math.sin((heartCycle - 0.15) / 0.1 * Math.PI) * 0.7; // dub
+    
+    if (pulse > 0) {
+      const vigR = ctx.createRadialGradient(W/2, H/2, H*0.25, W/2, H/2, H*0.85);
+      vigR.addColorStop(0, 'transparent');
+      vigR.addColorStop(0.6, 'transparent');
+      vigR.addColorStop(1, `rgba(255, 0, 0, ${pulse * 0.25})`);
+      ctx.fillStyle = vigR;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
   // End screen shake
   if (shakeTimer > 0) { ctx.restore(); }
+}
+
+// ─── DEATH CASCADE ───
+function triggerDeathCascade() {
+  const cascadeCanvas = document.createElement('canvas');
+  cascadeCanvas.id = 'deathCascade';
+  cascadeCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:16;pointer-events:none;';
+  cascadeCanvas.width = window.innerWidth;
+  cascadeCanvas.height = window.innerHeight;
+  document.body.appendChild(cascadeCanvas);
+  const dCtx = cascadeCanvas.getContext('2d');
+
+  // Gather all entity positions into shatter particles
+  const shatterParts = [];
+  for (const e of entities) {
+    const color = e.type === 'bad' ? '#ff3333' : e.type === 'power' ? '#00ffff' : '#00ff41';
+    const count = 4 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 5;
+      shatterParts.push({
+        x: e.x, y: e.y,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 1,
+        color, size: 1.5 + Math.random() * 3,
+        char: Math.random() > 0.5 ? e.char : null,
+        life: 1, decay: 0.008 + Math.random() * 0.008,
+        phase: 0, // for morphing into text later
+      });
+    }
+  }
+  // Also explode the player
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 3 + Math.random() * 6;
+    shatterParts.push({
+      x: player.x, y: player.y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 2,
+      color: '#00ff41', size: 2 + Math.random() * 3,
+      char: null, life: 1, decay: 0.006 + Math.random() * 0.005,
+      phase: 0,
+    });
+  }
+
+  // Target positions to spell "SYSTEM FAILURE"
+  const text = 'SYSTEM FAILURE';
+  const textSize = Math.min(cascadeCanvas.width * 0.08, 60);
+  dCtx.font = `bold ${textSize}px Orbitron, sans-serif`;
+  dCtx.textAlign = 'center';
+  const textMetrics = dCtx.measureText(text);
+  const textX = cascadeCanvas.width / 2;
+  const textY = cascadeCanvas.height / 2;
+
+  // Sample text pixels to get target positions
+  dCtx.clearRect(0, 0, cascadeCanvas.width, cascadeCanvas.height);
+  dCtx.fillStyle = '#ff3333';
+  dCtx.fillText(text, textX, textY);
+  const imgData = dCtx.getImageData(0, 0, cascadeCanvas.width, cascadeCanvas.height);
+  const textTargets = [];
+  const step = 4; // sample every 4th pixel
+  for (let py = 0; py < cascadeCanvas.height; py += step) {
+    for (let px = 0; px < cascadeCanvas.width; px += step) {
+      const idx = (py * cascadeCanvas.width + px) * 4;
+      if (imgData.data[idx + 3] > 128) {
+        textTargets.push({ x: px, y: py });
+      }
+    }
+  }
+  dCtx.clearRect(0, 0, cascadeCanvas.width, cascadeCanvas.height);
+
+  // Assign text targets to particles (cycle through if not enough particles)
+  for (let i = 0; i < shatterParts.length && i < textTargets.length; i++) {
+    shatterParts[i].targetX = textTargets[i % textTargets.length].x;
+    shatterParts[i].targetY = textTargets[i % textTargets.length].y;
+  }
+  // If we have more targets than particles, add extra particles at player position
+  for (let i = shatterParts.length; i < Math.min(textTargets.length, 600); i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 2 + Math.random() * 4;
+    shatterParts.push({
+      x: player.x + (Math.random() - 0.5) * 60,
+      y: player.y + (Math.random() - 0.5) * 60,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      color: '#ff3333', size: 1.5 + Math.random() * 2,
+      char: null, life: 1, decay: 0.004,
+      phase: 0,
+      targetX: textTargets[i].x, targetY: textTargets[i].y,
+    });
+  }
+
+  let elapsed = 0;
+  const SCATTER_TIME = 0.8; // seconds of free scatter
+  const MORPH_TIME = 1.5;   // seconds to morph into text
+  const HOLD_TIME = 1.0;    // seconds to hold text
+  const FADE_TIME = 0.8;    // seconds to dissolve
+
+  function animCascade() {
+    elapsed += 0.016;
+    dCtx.clearRect(0, 0, cascadeCanvas.width, cascadeCanvas.height);
+
+    const totalDur = SCATTER_TIME + MORPH_TIME + HOLD_TIME + FADE_TIME;
+    if (elapsed > totalDur) {
+      cascadeCanvas.remove();
+      return;
+    }
+
+    for (const p of shatterParts) {
+      if (elapsed < SCATTER_TIME) {
+        // Free scatter phase
+        p.x += p.vx; p.y += p.vy;
+        p.vy += 0.08; // gravity
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+      } else if (elapsed < SCATTER_TIME + MORPH_TIME && p.targetX !== undefined) {
+        // Morph toward text position
+        const morphProgress = (elapsed - SCATTER_TIME) / MORPH_TIME;
+        const ease = morphProgress * morphProgress * (3 - 2 * morphProgress); // smoothstep
+        p.x += (p.targetX - p.x) * ease * 0.08;
+        p.y += (p.targetY - p.y) * ease * 0.08;
+        p.color = '#ff3333'; // converge to red
+      }
+
+      let alpha = p.life;
+      if (elapsed > SCATTER_TIME + MORPH_TIME + HOLD_TIME) {
+        // Dissolve
+        const dissolveProgress = (elapsed - SCATTER_TIME - MORPH_TIME - HOLD_TIME) / FADE_TIME;
+        alpha *= (1 - dissolveProgress);
+      }
+
+      dCtx.globalAlpha = Math.max(0, alpha);
+      dCtx.fillStyle = p.color;
+      dCtx.shadowColor = p.color;
+      dCtx.shadowBlur = 4;
+      if (p.char && elapsed < SCATTER_TIME + 0.3) {
+        dCtx.font = `${p.size * 4}px Share Tech Mono`;
+        dCtx.textAlign = 'center';
+        dCtx.fillText(p.char, p.x, p.y);
+      } else {
+        dCtx.beginPath();
+        dCtx.arc(p.x, p.y, Math.max(0.5, p.size * Math.max(0, alpha)), 0, Math.PI * 2);
+        dCtx.fill();
+      }
+      dCtx.shadowBlur = 0;
+    }
+
+    requestAnimationFrame(animCascade);
+  }
+
+  requestAnimationFrame(animCascade);
 }
 
 // ─── GAME OVER ───
 function gameOver() {
   gameRunning=false; CG.gameplayStop(); hideBreather();
+  rainSpeedMult=1; rainColor='#00ff41'; rainGlitchTimer=0;
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('slowMoBar').classList.add('hidden');
   document.getElementById('slowMoLabel').classList.add('hidden');
