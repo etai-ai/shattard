@@ -305,48 +305,53 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 let audioCtx = null, audioUnlocked = false;
 // Tiny silent WAV for iOS audio session unlock
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-async function initAudio() {
+function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') {
-    try { await audioCtx.resume(); } catch (_) {}
-  }
+  const resumePromise = audioCtx.state !== 'running'
+    ? audioCtx.resume().catch(() => {})
+    : Promise.resolve();
   if (!audioUnlocked) {
     // HTML5 Audio element unlocks iOS audio session when this play() succeeds.
     const a = new Audio(SILENT_WAV);
     a.playsInline = true;
-    let htmlAudioUnlocked = false;
-    try {
-      await a.play();
-      htmlAudioUnlocked = true;
-    } catch (_) {}
-    if (htmlAudioUnlocked && audioCtx.state === 'running') {
-      // Also prime a silent oscillator in the Web Audio graph.
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      g.gain.value = 0;
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(0); o.stop(audioCtx.currentTime + 0.001);
-      audioUnlocked = true;
-    }
+    const playPromise = a.play();
+    Promise.allSettled([resumePromise, playPromise]).then((results) => {
+      const playOk = results[1]?.status === 'fulfilled';
+      if (playOk && audioCtx && audioCtx.state === 'running') {
+        // Also prime a silent oscillator in the Web Audio graph.
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        g.gain.value = 0;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(0); o.stop(audioCtx.currentTime + 0.001);
+        audioUnlocked = true;
+      }
+    });
+    return;
   }
+  return resumePromise;
 }
 // Re-resume audio on every user gesture — iOS suspends the context on
 // tab switch, lock screen, and after ads, so a one-shot listener isn't enough.
-async function _unlockAudio() {
-  await initAudio();
+function _unlockAudio() {
+  initAudio();
 }
-document.addEventListener('touchstart', _unlockAudio, { passive: true });
-document.addEventListener('touchend', _unlockAudio, { passive: true });
-document.addEventListener('click', _unlockAudio);
+document.addEventListener('touchstart', _unlockAudio, { passive: true, capture: true });
+document.addEventListener('touchend', _unlockAudio, { passive: true, capture: true });
+document.addEventListener('pointerdown', _unlockAudio, { passive: true, capture: true });
+document.addEventListener('click', _unlockAudio, { capture: true });
+document.addEventListener('keydown', _unlockAudio, { capture: true });
 // Re-resume after tab becomes visible again (iOS suspends audio in background)
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if (!document.hidden && audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
 });
 function playTone(freq, dur, vol=0.3, type='sine') {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
+  if (audioCtx.state !== 'running') {
+    audioCtx.resume().then(() => {
+      if (audioCtx && audioCtx.state === 'running') playTone(freq, dur, vol, type);
+    }).catch(() => {});
+    return;
   }
-  if (audioCtx.state !== 'running') return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
