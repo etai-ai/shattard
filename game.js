@@ -302,86 +302,31 @@ function showBreather(dur) {
 function hideBreather() { document.getElementById('breatherBar').classList.remove('visible'); }
 
 // ─── AUDIO ───
-// Howler.js-proven approach: create AudioContext early, unlock with empty
-// buffer on touchend (the most reliable iOS unlock event), resume on
-// every gesture, and keep an HTML5 Audio element looping silence so iOS
-// treats oscillator output as "media" (bypasses mute switch).
-let audioCtx = null, audioUnlocked = false;
-
-function _createCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  return audioCtx;
-}
-
-// Unlock: play empty buffer + resume — must happen inside user gesture
-function _unlockAudio() {
-  const ctx = _createCtx();
-  // Always try to resume on every gesture
-  if (ctx.state !== 'running') ctx.resume().catch(() => {});
-  if (audioUnlocked) return;
-  // Play a 1-sample silent buffer through Web Audio (howler.js technique)
-  try {
-    const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
-  } catch(_) {}
-  // Also start a looping silent HTML5 Audio element — this forces iOS to
-  // switch the audio session to "media" mode so oscillators bypass the
-  // hardware mute switch. We generate the WAV in code (no base64 guessing).
-  try {
-    const sr = 8000, dur = 0.5, samples = sr * dur;
-    const arrBuf = new ArrayBuffer(44 + samples * 2);
-    const v = new DataView(arrBuf);
-    // WAV header
-    const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-    writeStr(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); writeStr(8, 'WAVE');
-    writeStr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
-    v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
-    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-    writeStr(36, 'data'); v.setUint32(40, samples * 2, true);
-    // samples are all zero = silence
-    const blob = new Blob([arrBuf], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const tag = new Audio(url);
-    tag.loop = true;
-    tag.playsInline = true;
-    tag.setAttribute('playsinline', '');
-    tag.volume = 0.01; // near-silent but nonzero keeps session alive
-    tag.play().catch(() => {});
-    // Store reference for cleanup
-    audioCtx._silentTag = tag;
-    audioCtx._silentURL = url;
-  } catch(_) {}
-  audioUnlocked = true;
-}
-
-// Listen on BOTH touchstart and touchend — iOS Safari is pickiest about
-// touchend, but touchstart gives us earlier unlock on some versions.
-document.addEventListener('touchstart', _unlockAudio, { passive: true });
-document.addEventListener('touchend', _unlockAudio, { passive: true });
-document.addEventListener('click', _unlockAudio);
-document.addEventListener('keydown', _unlockAudio);
-// Re-resume when tab comes back to foreground
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && audioCtx && audioCtx.state !== 'running') {
-    audioCtx.resume().catch(() => {});
-  }
-});
+let audioCtx = null;
 
 function initAudio() {
-  _createCtx();
-  // _unlockAudio is called by gesture listeners, but also force it here
-  // since startGame() is called from an onclick (valid gesture)
-  _unlockAudio();
+  // Create AudioContext directly inside user gesture (startGame onclick).
+  // This is the simplest, most reliable iOS unlock — no tricks needed.
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Resume must happen inside a user gesture for iOS Safari
+  audioCtx.resume();
 }
 
+// Also try to resume on any later gesture (handles tab-switch, backgrounding)
+function _resumeAudio() {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+document.addEventListener('touchend', _resumeAudio, { passive: true });
+document.addEventListener('click', _resumeAudio);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) _resumeAudio();
+});
+
 function playTone(freq, dur, vol=0.3, type='sine') {
-  if (!audioCtx) return;
-  // Don't bail on suspended — just try to resume and play anyway.
-  // Oscillators queue up and play once context resumes.
-  if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+  if (!audioCtx || audioCtx.state === 'closed') return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
