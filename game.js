@@ -304,16 +304,19 @@ function hideBreather() { document.getElementById('breatherBar').classList.remov
 // ─── AUDIO ───
 let audioCtx = null;
 
-// iOS 17+ exposes navigator.audioSession — setting type to "playback"
-// makes Web Audio ignore the hardware mute/ringer switch.
-// See: https://bugs.webkit.org/show_bug.cgi?id=237322
-if (navigator.audioSession) {
-  navigator.audioSession.type = 'playback';
-}
-
 function initAudio() {
+  // Set audio session to "playback" so iOS ignores the mute switch.
+  // Must be set before creating/resuming AudioContext.
+  // See: https://bugs.webkit.org/show_bug.cgi?id=237322
+  if (navigator.audioSession) {
+    navigator.audioSession.type = 'playback';
+  }
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Re-apply after context exists (some iOS versions need this order)
+  if (navigator.audioSession) {
+    navigator.audioSession.type = 'playback';
   }
   audioCtx.resume();
 }
