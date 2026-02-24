@@ -302,72 +302,86 @@ function showBreather(dur) {
 function hideBreather() { document.getElementById('breatherBar').classList.remove('visible'); }
 
 // ─── AUDIO ───
+// Howler.js-proven approach: create AudioContext early, unlock with empty
+// buffer on touchend (the most reliable iOS unlock event), resume on
+// every gesture, and keep an HTML5 Audio element looping silence so iOS
+// treats oscillator output as "media" (bypasses mute switch).
 let audioCtx = null, audioUnlocked = false;
-// Silent looping <audio> tag keeps iOS audio session in "media" mode so
-// Web Audio (oscillators) bypass the hardware mute/ringer switch.
-let iosSilentTag = null;
 
-// Detect iOS (iPhone/iPad/iPod, including iPad pretending to be Mac)
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-  (/mac os x/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0);
-
-// Tiny silent MP3 (~200ms), base64-encoded — loops continuously on iOS
-const SILENT_MP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwMHAAAAAAD/+1DEAAAHAAGf9AAAIiWcM/8xIABERGRkZP/E4jBGP/xERf/xERERH//xERP/xER///iIj//ERERERERERERERERERERERH///iIiIiIiIiIiIiIiIiIiIiJf//ERERERERERERERERERERERH////iIiIiIiIiP/7UMQTgAjEAaf+YkABH4A0f8xIAIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH///+IiIiIiIiI//tQxCMAB2wBq/mGACDwADV/MEAEiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIiJf/8RERERERERERERERERERERERER////iIiIiIiIj/+1DEQAAHIAGn+YYAIOeANX8wwAAAAiIiIiIiIiJf//ERERERERERERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIl//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX//xERERERERERERERERERERER////4iIiIiIiIiIiIiIiIiIiIiIiX///EREREREREREP/7UMRSAAZUAZ/5ggAggAAz/wAAABEREREREREREf///+IiIiIiIj///xERERERH////iIiIj////xEREREREREREREREREREREREREREf///+IiIiIiIiIiIiIiP///ERERERERH////iIiIj///xEREREREREREREf///+IiIiIiIj//xERERERERERERH///+IiIiIiIiIiIiI//tQxHIABPABm/gAAACAADN/AAAAP///ERERERERERERERH///+IiIiIiIiIiIiIj///xERERERERERERERH////iIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI';
-
-function _startSilentTag() {
-  if (iosSilentTag || !isIOS) return;
-  iosSilentTag = new Audio(SILENT_MP3);
-  iosSilentTag.loop = true;
-  iosSilentTag.playsInline = true;
-  iosSilentTag.setAttribute('playsinline', '');
-  iosSilentTag.play().catch(() => {});
-}
-
-function _stopSilentTag() {
-  if (!iosSilentTag) return;
-  iosSilentTag.pause();
-  iosSilentTag.removeAttribute('src');
-  iosSilentTag.load();
-  iosSilentTag = null;
-}
-
-function initAudio() {
+function _createCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-  if (!audioUnlocked) {
-    // Start the silent looping tag on iOS to force media audio session
-    _startSilentTag();
-    // Also prime a silent oscillator in the Web Audio graph
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    g.gain.setValueAtTime(0, audioCtx.currentTime);
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(0); o.stop(audioCtx.currentTime + 0.001);
-    audioUnlocked = true;
-  }
+  return audioCtx;
 }
-// Re-resume audio on every user gesture — iOS suspends the context on
-// tab switch, lock screen, and after ads, so a one-shot listener isn't enough.
+
+// Unlock: play empty buffer + resume — must happen inside user gesture
 function _unlockAudio() {
-  initAudio();
+  const ctx = _createCtx();
+  // Always try to resume on every gesture
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  if (audioUnlocked) return;
+  // Play a 1-sample silent buffer through Web Audio (howler.js technique)
+  try {
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch(_) {}
+  // Also start a looping silent HTML5 Audio element — this forces iOS to
+  // switch the audio session to "media" mode so oscillators bypass the
+  // hardware mute switch. We generate the WAV in code (no base64 guessing).
+  try {
+    const sr = 8000, dur = 0.5, samples = sr * dur;
+    const arrBuf = new ArrayBuffer(44 + samples * 2);
+    const v = new DataView(arrBuf);
+    // WAV header
+    const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    writeStr(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); writeStr(8, 'WAVE');
+    writeStr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    writeStr(36, 'data'); v.setUint32(40, samples * 2, true);
+    // samples are all zero = silence
+    const blob = new Blob([arrBuf], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const tag = new Audio(url);
+    tag.loop = true;
+    tag.playsInline = true;
+    tag.setAttribute('playsinline', '');
+    tag.volume = 0.01; // near-silent but nonzero keeps session alive
+    tag.play().catch(() => {});
+    // Store reference for cleanup
+    audioCtx._silentTag = tag;
+    audioCtx._silentURL = url;
+  } catch(_) {}
+  audioUnlocked = true;
 }
-document.addEventListener('touchstart', _unlockAudio, { passive: true, capture: true });
-document.addEventListener('touchend', _unlockAudio, { passive: true, capture: true });
-document.addEventListener('pointerdown', _unlockAudio, { passive: true, capture: true });
-document.addEventListener('click', _unlockAudio, { capture: true });
-document.addEventListener('keydown', _unlockAudio, { capture: true });
-// Re-resume after tab becomes visible again
+
+// Listen on BOTH touchstart and touchend — iOS Safari is pickiest about
+// touchend, but touchstart gives us earlier unlock on some versions.
+document.addEventListener('touchstart', _unlockAudio, { passive: true });
+document.addEventListener('touchend', _unlockAudio, { passive: true });
+document.addEventListener('click', _unlockAudio);
+document.addEventListener('keydown', _unlockAudio);
+// Re-resume when tab comes back to foreground
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    // Stop silent tag when backgrounded (hides iOS lock screen media widget)
-    _stopSilentTag();
-  } else {
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-    if (audioUnlocked) _startSilentTag();
+  if (!document.hidden && audioCtx && audioCtx.state !== 'running') {
+    audioCtx.resume().catch(() => {});
   }
 });
+
+function initAudio() {
+  _createCtx();
+  // _unlockAudio is called by gesture listeners, but also force it here
+  // since startGame() is called from an onclick (valid gesture)
+  _unlockAudio();
+}
+
 function playTone(freq, dur, vol=0.3, type='sine') {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  // Don't bail on suspended — just try to resume and play anyway.
+  // Oscillators queue up and play once context resumes.
+  if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, audioCtx.currentTime);
